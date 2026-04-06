@@ -43,7 +43,13 @@ const THEME_INJECTION_JS: &str = r#"
     '  --nav-input-bg: 0 0% 14% / 1 !important;',
     '  --nav-glass-blur: 0px !important;',
     '}',
-    'html, body { background-color: #141414 !important; color: #FFFFFF !important; }',
+    /* 우측 메인 콘텐츠는 더 어두운 검정 (#0a0a0a), 사이드바만 더 밝은 회색 */
+    'html, body { background-color: #0a0a0a !important; color: #FFFFFF !important; }',
+    /* 사이드바 (bg-background/{50..90}, backdrop-blur-* 클래스로 매칭) → 밝은 회색 */
+    '[class*="bg-background\\/"] { background-color: #1f1f1f !important; }',
+    '[class*="backdrop-blur"] { background-color: #1f1f1f !important; }',
+    /* 메인 콘텐츠 헤더 (.pwa-header-safe) → 어두운 검정 */
+    '.pwa-header-safe { background-color: #0a0a0a !important; }',
     /* macOS overlay 타이틀바: 신호등 버튼 영역만큼 좌상단 비우기 */
     /* body::before는 투명한 드래그 영역만 제공 (시각적으로 가리지 않음) */
     'body::before {',
@@ -66,8 +72,8 @@ const THEME_INJECTION_JS: &str = r#"
     '.pwa-header-safe {',
     '  padding-top: 36px !important;',
     '}',
-    /* 투명도가 있는 background 클래스 모두 불투명 강제 (attribute selector로 매칭) */
-    '[class*="bg-background"] { background-color: #141414 !important; }',
+    /* bg-background (불투명 메인) → 검정. /80 같은 투명 변형은 위에서 사이드바로 처리됨 */
+    '.bg-background { background-color: #0a0a0a !important; }',
     /* 모든 backdrop-blur 제거 */
     '[class*="backdrop-blur"] { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }',
     /* card / muted 톤 통일 */
