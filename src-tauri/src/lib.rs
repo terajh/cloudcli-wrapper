@@ -23,9 +23,32 @@ fn cloudcli_dir() -> PathBuf {
 }
 
 fn find_node() -> String {
-    // PATH에 node가 있으면 그걸 사용. 로그인 셸 PATH를 얻기 위해 zsh -lc 사용
+    // 1. CLOUDCLI_NODE_BIN 환경변수가 있으면 우선 사용
+    if let Ok(node) = env::var("CLOUDCLI_NODE_BIN") {
+        if !node.is_empty() {
+            return node;
+        }
+    }
+
+    // 2. ~/.nvm/versions/node/*/bin/node 중 가장 최신 버전 탐색 (nvm 사용자 우선)
+    if let Ok(home) = env::var("HOME") {
+        let nvm_dir = PathBuf::from(&home).join(".nvm").join("versions").join("node");
+        if let Ok(entries) = std::fs::read_dir(&nvm_dir) {
+            let mut versions: Vec<PathBuf> = entries
+                .filter_map(|e| e.ok())
+                .map(|e| e.path())
+                .filter(|p| p.join("bin").join("node").exists())
+                .collect();
+            versions.sort();
+            if let Some(latest) = versions.last() {
+                return latest.join("bin").join("node").to_string_lossy().to_string();
+            }
+        }
+    }
+
+    // 3. interactive shell(.zshrc 로드, nvm 적용됨)에서 node 경로 탐색
     if let Ok(output) = Command::new("/bin/zsh")
-        .args(["-lc", "command -v node"])
+        .args(["-ic", "command -v node"])
         .output()
     {
         if output.status.success() {
@@ -35,7 +58,8 @@ fn find_node() -> String {
             }
         }
     }
-    // fallback: PATH 기반으로 찾기
+
+    // 4. fallback
     String::from("node")
 }
 
@@ -60,8 +84,8 @@ fn spawn_server() -> std::io::Result<Child> {
         .env("HOST", SERVER_HOST)
         .env("NODE_ENV", "production")
         .env("PATH", login_path)
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::inherit())
         .spawn()
 }
 
