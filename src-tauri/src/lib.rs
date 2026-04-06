@@ -191,14 +191,43 @@ fn spawn_server() -> std::io::Result<Child> {
     let server_entry = dir.join("server").join("index.js");
     let node = find_node();
 
-    // node 실행에 필요한 PATH 구성 (nvm 등 로그인 셸 PATH 상속)
-    let login_path = Command::new("/bin/zsh")
-        .args(["-lc", "echo $PATH"])
+    // node 및 claude/codex/gemini 등 CLI를 찾기 위한 PATH 구성.
+    // interactive shell(.zshrc 로드)을 우선 사용해 nvm/pyenv/local-bin 모두 포함.
+    // login shell만 쓰면 ~/.local/bin 같은 .zshrc에서 export된 경로가 누락됨.
+    let shell_path = Command::new("/bin/zsh")
+        .args(["-ic", "echo $PATH"])
         .output()
         .ok()
         .and_then(|o| String::from_utf8(o.stdout).ok())
         .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .or_else(|| {
+            Command::new("/bin/zsh")
+                .args(["-lc", "echo $PATH"])
+                .output()
+                .ok()
+                .and_then(|o| String::from_utf8(o.stdout).ok())
+                .map(|s| s.trim().to_string())
+        })
         .unwrap_or_else(|| env::var("PATH").unwrap_or_default());
+
+    // 안전하게 ~/.local/bin과 nvm 현재 버전 bin을 명시적으로 prepend
+    let home = env::var("HOME").unwrap_or_default();
+    let extra_paths = vec![
+        format!("{}/.local/bin", home),
+        format!("{}/.cargo/bin", home),
+        "/opt/homebrew/bin".to_string(),
+        "/usr/local/bin".to_string(),
+    ];
+    let prepended: Vec<String> = extra_paths
+        .into_iter()
+        .filter(|p| !shell_path.split(':').any(|existing| existing == p))
+        .collect();
+    let login_path = if prepended.is_empty() {
+        shell_path
+    } else {
+        format!("{}:{}", prepended.join(":"), shell_path)
+    };
 
     Command::new(&node)
         .arg(&server_entry)
