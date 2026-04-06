@@ -1,7 +1,8 @@
 use std::env;
+use std::fs::{File, OpenOptions};
 use std::net::TcpStream;
 use std::path::PathBuf;
-use std::process::{Child, Command};
+use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -88,6 +89,9 @@ const THEME_INJECTION_JS: &str = r#"
     '}',
     /* border 톤 다운 */
     '.border-border, [class*="border-border"] { border-color: rgba(255,255,255,0.08) !important; }',
+    /* 클릭 가능한 요소(button, role=button, [data-state] 등)에 cursor: pointer */
+    'button, [role="button"], a, summary { cursor: pointer !important; }',
+    'button:disabled, [role="button"][aria-disabled="true"] { cursor: not-allowed !important; }',
     /* ─── 스크롤바 완전 숨김 (전역) ─── */
     '*::-webkit-scrollbar { width: 0 !important; height: 0 !important; display: none !important; background: transparent !important; }',
     '*::-webkit-scrollbar-track, *::-webkit-scrollbar-thumb, *::-webkit-scrollbar-corner { display: none !important; background: transparent !important; }',
@@ -226,6 +230,33 @@ fn spawn_server() -> std::io::Result<Child> {
         format!("{}:{}", prepended.join(":"), shell_path)
     };
 
+    // 서버 stderr/stdout을 ~/Library/Logs/Caui/server.log 에 기록 (디버깅용)
+    let log_dir = PathBuf::from(&home).join("Library").join("Logs").join("Caui");
+    let _ = std::fs::create_dir_all(&log_dir);
+    let log_path = log_dir.join("server.log");
+    let stdout_target: Stdio = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+        .map(Stdio::from)
+        .unwrap_or_else(|_| Stdio::null());
+    let stderr_target: Stdio = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+        .map(Stdio::from)
+        .unwrap_or_else(|_| Stdio::null());
+
+    // 로그 분리자: 새 세션 시작 표시
+    if let Ok(mut f) = File::options().append(true).create(true).open(&log_path) {
+        use std::io::Write;
+        let _ = writeln!(
+            f,
+            "\n========== Caui session started @ {:?} ==========",
+            std::time::SystemTime::now()
+        );
+    }
+
     Command::new(&node)
         .arg(&server_entry)
         .current_dir(&dir)
@@ -233,8 +264,8 @@ fn spawn_server() -> std::io::Result<Child> {
         .env("HOST", SERVER_HOST)
         .env("NODE_ENV", "production")
         .env("PATH", login_path)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::inherit())
+        .stdout(stdout_target)
+        .stderr(stderr_target)
         .spawn()
 }
 
