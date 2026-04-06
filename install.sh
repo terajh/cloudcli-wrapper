@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# C.UI Desktop Installer
+# Caui Desktop Installer
 #
 # Tauri 기반 claudecodeui 데스크톱 앱을 설치한다.
 # 사용법: curl -fsSL https://raw.githubusercontent.com/terajh/cloudcli-wrapper/develop/tauri/install.sh | bash
@@ -15,7 +15,7 @@ INSTALL_DIR="${CLOUDCLI_INSTALL_DIR:-$HOME/.cloudcli}"
 CLOUDCLI_REPO="https://github.com/siteboon/claudecodeui.git"
 WRAPPER_REPO="https://github.com/terajh/cloudcli-wrapper.git"
 WRAPPER_BRANCH="develop/tauri"
-APP_DEST="/Applications/C.UI.app"
+APP_DEST="/Applications/Caui.app"
 
 # 색상
 BOLD=$'\033[1m'
@@ -38,7 +38,7 @@ if [[ "$(uname)" != "Darwin" ]]; then
   exit 1
 fi
 
-echo "${BOLD}C.UI Desktop Installer${RESET}"
+echo "${BOLD}Caui Desktop Installer${RESET}"
 echo "설치 경로: $INSTALL_DIR"
 echo ""
 
@@ -144,7 +144,7 @@ export CLOUDCLI_DIR="$CLOUDCLI_SRC"
 (cd "$WRAPPER_SRC" && cargo tauri build)
 ok "Tauri 앱 빌드 완료"
 
-BUILT_APP="$WRAPPER_SRC/src-tauri/target/release/bundle/macos/C.UI.app"
+BUILT_APP="$WRAPPER_SRC/src-tauri/target/release/bundle/macos/Caui.app"
 if [ ! -d "$BUILT_APP" ]; then
   err "빌드 결과물을 찾을 수 없습니다: $BUILT_APP"
   exit 1
@@ -166,10 +166,10 @@ xattr -cr "$APP_DEST" 2>/dev/null || true
 
 ok "설치 완료!"
 echo ""
-echo "${BOLD}${GREEN}✓ C.UI가 설치되었습니다.${RESET}"
+echo "${BOLD}${GREEN}✓ Caui가 설치되었습니다.${RESET}"
 echo ""
 echo "  실행: ${BOLD}open $APP_DEST${RESET}"
-echo "  또는 Launchpad에서 'C.UI' 검색"
+echo "  또는 Launchpad에서 'Caui' 검색"
 echo ""
 echo "  claudecodeui 소스: $CLOUDCLI_SRC"
 echo "  wrapper 소스:     $WRAPPER_SRC"

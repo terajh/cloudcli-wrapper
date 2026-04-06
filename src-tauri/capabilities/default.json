@@ -1,6 +1,6 @@
 {
   "identifier": "default",
-  "description": "Default capability for C.UI desktop",
+  "description": "Default capability for Caui desktop",
   "windows": ["main"],
   "permissions": [
     "core:default",
