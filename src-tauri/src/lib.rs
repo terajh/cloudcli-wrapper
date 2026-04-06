@@ -257,16 +257,41 @@ fn spawn_server() -> std::io::Result<Child> {
         );
     }
 
-    Command::new(&node)
-        .arg(&server_entry)
+    let mut cmd = Command::new(&node);
+    cmd.arg(&server_entry)
         .current_dir(&dir)
         .env("SERVER_PORT", SERVER_PORT.to_string())
         .env("HOST", SERVER_HOST)
         .env("NODE_ENV", "production")
-        .env("PATH", login_path)
-        .stdout(stdout_target)
-        .stderr(stderr_target)
-        .spawn()
+        .env("PATH", login_path);
+
+    // Claude Agent SDK는 spawn한 child가 CLAUDECODE/CLAUDE_CODE_* 등이 보이면
+    // "nested session" 에러로 즉시 exit. 부모 셸에서 새어 들어온 모든 Claude 관련
+    // 환경변수를 명시적으로 제거해 SDK 내부 CLI가 깨끗한 환경에서 시작되도록 함.
+    let claude_env_vars = [
+        "CLAUDECODE",
+        "CLAUDE_CODE_ENTRYPOINT",
+        "CLAUDE_CODE_OAUTH_TOKEN",
+        "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST",
+        "CLAUDE_CODE_DISABLE_CRON",
+        "CLAUDE_CODE_EMIT_TOOL_USE_SUMMARIES",
+        "CLAUDE_CODE_ENABLE_ASK_USER_QUESTION_TOOL",
+        "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS",
+        "CLAUDE_AGENT_SDK_VERSION",
+        "CLAUDE_CODE_STREAM_CLOSE_TIMEOUT",
+        "ANTHROPIC_API_KEY",
+        "ANTHROPIC_AUTH_TOKEN",
+        "ANTHROPIC_BASE_URL",
+        "ANTHROPIC_DEFAULT_OPUS_MODEL",
+        "ANTHROPIC_DEFAULT_SONNET_MODEL",
+        "ANTHROPIC_MODEL",
+        "ANTHROPIC_SMALL_FAST_MODEL",
+    ];
+    for var in claude_env_vars {
+        cmd.env_remove(var);
+    }
+
+    cmd.stdout(stdout_target).stderr(stderr_target).spawn()
 }
 
 fn wait_for_server_ready() -> bool {
