@@ -12,6 +12,56 @@ const SERVER_PORT: u16 = 3001;
 const SERVER_HOST: &str = "127.0.0.1";
 const MAX_WAIT_SECS: u64 = 30;
 
+// Codex 다크 테마 색상을 claudecodeui 위에 강제 적용하는 CSS 인젝션 스크립트.
+// page load 전후 모두 동작하도록 readyState 체크 + MutationObserver로 재주입.
+const THEME_INJECTION_JS: &str = r#"
+(function() {
+  var STYLE_ID = '__caui_theme_override__';
+  var CSS = `
+    :root.dark, .dark {
+      --background: 0 20% 2.9% !important;
+      --foreground: 0 0% 100% !important;
+      --card: 0 15% 5% !important;
+      --card-foreground: 0 0% 100% !important;
+      --popover: 0 15% 5% !important;
+      --popover-foreground: 0 0% 100% !important;
+      --primary: 209 100% 60% !important;
+      --primary-foreground: 0 0% 100% !important;
+      --secondary: 0 12% 8% !important;
+      --secondary-foreground: 0 0% 100% !important;
+      --muted: 0 12% 8% !important;
+      --muted-foreground: 0 0% 65% !important;
+      --accent: 209 100% 60% !important;
+      --accent-foreground: 0 0% 100% !important;
+      --border: 0 10% 12% !important;
+      --input: 0 10% 14% !important;
+      --ring: 209 100% 60% !important;
+      --nav-glass-bg: 0 20% 4% / 0.55 !important;
+      --nav-input-bg: 0 12% 8% / 0.5 !important;
+    }
+    html, body { background-color: #090606 !important; color: #FFFFFF !important; }
+  `;
+  function inject() {
+    if (document.getElementById(STYLE_ID)) return;
+    var style = document.createElement('style');
+    style.id = STYLE_ID;
+    style.textContent = CSS;
+    (document.head || document.documentElement).appendChild(style);
+  }
+  inject();
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', inject);
+  }
+  // SPA 내비게이션이 head를 갈아끼울 경우 대비
+  var observer = new MutationObserver(function() {
+    if (!document.getElementById(STYLE_ID)) inject();
+  });
+  if (document.documentElement) {
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+  }
+})();
+"#;
+
 struct ServerProcess(Mutex<Option<Child>>);
 
 fn cloudcli_dir() -> PathBuf {
@@ -150,7 +200,10 @@ pub fn run() {
                             if let Some(window) = handle.get_webview_window("main") {
                                 let _ = window.navigate(url.parse().unwrap());
 
-                                thread::sleep(Duration::from_millis(500));
+                                // 페이지가 로드될 시간을 준 뒤 CSS 주입
+                                thread::sleep(Duration::from_millis(800));
+                                let _ = window.eval(THEME_INJECTION_JS);
+
                                 let _ = window.show();
                                 let _ = window.set_focus();
                             }
