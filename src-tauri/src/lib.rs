@@ -13,79 +13,94 @@ const SERVER_HOST: &str = "127.0.0.1";
 const MAX_WAIT_SECS: u64 = 30;
 
 // Codex 다크 테마 색상을 claudecodeui 위에 강제 적용하는 CSS 인젝션 스크립트.
-// page load 전후 모두 동작하도록 readyState 체크 + MutationObserver로 재주입.
+// 1) CSS 변수 오버라이드 2) 투명도/블러 제거 3) 스크롤바 숨김
+// 4) 페이지가 늦게 로드되어도 적용되도록 setInterval로 재주입
 const THEME_INJECTION_JS: &str = r#"
 (function() {
   var STYLE_ID = '__caui_theme_override__';
-  var CSS = `
-    :root.dark, .dark {
-      --background: 0 20% 2.9% !important;
-      --foreground: 0 0% 100% !important;
-      --card: 0 12% 6% !important;
-      --card-foreground: 0 0% 100% !important;
-      --popover: 0 12% 6% !important;
-      --popover-foreground: 0 0% 100% !important;
-      --primary: 209 100% 60% !important;
-      --primary-foreground: 0 0% 100% !important;
-      --secondary: 0 10% 10% !important;
-      --secondary-foreground: 0 0% 100% !important;
-      --muted: 0 10% 10% !important;
-      --muted-foreground: 0 0% 60% !important;
-      --accent: 209 100% 60% !important;
-      --accent-foreground: 0 0% 100% !important;
-      --border: 0 8% 14% !important;
-      --input: 0 8% 14% !important;
-      --ring: 209 100% 60% !important;
-      --nav-glass-bg: 0 20% 2.9% / 1 !important;
-      --nav-input-bg: 0 10% 10% / 1 !important;
-      --nav-glass-blur: 0px !important;
-    }
-    html, body { background-color: #090606 !important; color: #FFFFFF !important; }
+  // CSS는 head 맨 마지막에 삽입되므로 자연스럽게 가장 마지막 cascade가 됨
+  var CSS = [
+    /* CSS 변수 오버라이드 */
+    ':root.dark, .dark, html.dark, html {',
+    '  --background: 0 20% 2.9% !important;',
+    '  --foreground: 0 0% 100% !important;',
+    '  --card: 0 12% 6% !important;',
+    '  --card-foreground: 0 0% 100% !important;',
+    '  --popover: 0 12% 6% !important;',
+    '  --popover-foreground: 0 0% 100% !important;',
+    '  --primary: 209 100% 60% !important;',
+    '  --primary-foreground: 0 0% 100% !important;',
+    '  --secondary: 0 10% 10% !important;',
+    '  --secondary-foreground: 0 0% 100% !important;',
+    '  --muted: 0 10% 10% !important;',
+    '  --muted-foreground: 0 0% 60% !important;',
+    '  --accent: 209 100% 60% !important;',
+    '  --accent-foreground: 0 0% 100% !important;',
+    '  --border: 0 8% 14% !important;',
+    '  --input: 0 8% 14% !important;',
+    '  --ring: 209 100% 60% !important;',
+    '  --nav-glass-bg: 0 20% 2.9% / 1 !important;',
+    '  --nav-input-bg: 0 10% 10% / 1 !important;',
+    '  --nav-glass-blur: 0px !important;',
+    '}',
+    'html, body { background-color: #090606 !important; color: #FFFFFF !important; }',
+    /* 투명도가 있는 background 클래스 모두 불투명 강제 (attribute selector로 매칭) */
+    '[class*="bg-background"] { background-color: #090606 !important; }',
+    /* 모든 backdrop-blur 제거 */
+    '[class*="backdrop-blur"] { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }',
+    /* card / muted 톤 통일 */
+    '[class*="bg-card"] { background-color: #100c0c !important; }',
+    '[class~="bg-muted/30"], [class*="bg-muted\\/30"] { background-color: rgba(255,255,255,0.03) !important; }',
+    '[class~="bg-muted/40"], [class*="bg-muted\\/40"] { background-color: rgba(255,255,255,0.04) !important; }',
+    '[class~="bg-muted/50"], [class*="bg-muted\\/50"] { background-color: rgba(255,255,255,0.05) !important; }',
+    '[class~="bg-muted/60"], [class*="bg-muted\\/60"] { background-color: rgba(255,255,255,0.07) !important; }',
+    /* hover/selected 톤 */
+    '[class*="hover:bg-muted"]:hover { background-color: rgba(255,255,255,0.08) !important; }',
+    '[class*="hover:bg-accent"]:hover { background-color: rgba(255,255,255,0.06) !important; }',
+    /* 사이드바 root: ScrollArea 부모도 불투명 */
+    '.backdrop-blur-sm, .backdrop-blur, .backdrop-blur-md, .backdrop-blur-lg, .backdrop-blur-xl {',
+    '  background-color: #090606 !important;',
+    '}',
+    /* border 톤 다운 */
+    '.border-border, [class*="border-border"] { border-color: rgba(255,255,255,0.08) !important; }',
+    /* ─── 스크롤바 완전 숨김 (전역) ─── */
+    '*::-webkit-scrollbar { width: 0 !important; height: 0 !important; display: none !important; background: transparent !important; }',
+    '*::-webkit-scrollbar-track, *::-webkit-scrollbar-thumb, *::-webkit-scrollbar-corner { display: none !important; background: transparent !important; }',
+    'html, body, * { scrollbar-width: none !important; -ms-overflow-style: none !important; }'
+  ].join('\n');
 
-    /* sidebar root: bg-background/80 backdrop-blur-sm 를 불투명하게 강제 */
-    .bg-background\\/80,
-    .bg-background\\/90,
-    .bg-background\\/70,
-    .bg-background\\/60,
-    .bg-background\\/50 {
-      background-color: #090606 !important;
-    }
-    .backdrop-blur-sm,
-    .backdrop-blur,
-    .backdrop-blur-md,
-    .backdrop-blur-lg,
-    .backdrop-blur-xl {
-      backdrop-filter: none !important;
-      -webkit-backdrop-filter: none !important;
-    }
-
-    /* sidebar 내부 카드/버튼 hover/selected: 약간 밝은 톤 */
-    .bg-card { background-color: #100c0c !important; }
-    .bg-muted\\/30 { background-color: rgba(255,255,255,0.03) !important; }
-    .bg-muted\\/40 { background-color: rgba(255,255,255,0.04) !important; }
-    .bg-muted\\/50 { background-color: rgba(255,255,255,0.05) !important; }
-    .bg-muted\\/60 { background-color: rgba(255,255,255,0.07) !important; }
-    .hover\\:bg-muted\\/60:hover { background-color: rgba(255,255,255,0.08) !important; }
-    .hover\\:bg-accent:hover { background-color: rgba(255,255,255,0.06) !important; }
-
-    /* border 색상도 톤 다운 */
-    .border-border { border-color: rgba(255,255,255,0.08) !important; }
-  `;
   function inject() {
-    if (document.getElementById(STYLE_ID)) return;
+    var existing = document.getElementById(STYLE_ID);
+    if (existing) {
+      // head 맨 끝으로 이동시켜 cascade 우선순위 보장
+      if (existing.parentNode && existing.parentNode.lastChild !== existing) {
+        existing.parentNode.appendChild(existing);
+      }
+      return;
+    }
     var style = document.createElement('style');
     style.id = STYLE_ID;
     style.textContent = CSS;
     (document.head || document.documentElement).appendChild(style);
   }
+
+  // 즉시 1회 + DOMContentLoaded + load 이벤트 + 폴링
   inject();
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', inject);
   }
-  // SPA 내비게이션이 head를 갈아끼울 경우 대비
-  var observer = new MutationObserver(function() {
-    if (!document.getElementById(STYLE_ID)) inject();
-  });
+  window.addEventListener('load', inject);
+
+  // 첫 5초간 250ms마다 재주입 (React 마운트 + 동적 CSS 로드 대응)
+  var attempts = 0;
+  var interval = setInterval(function() {
+    inject();
+    attempts++;
+    if (attempts >= 20) clearInterval(interval);
+  }, 250);
+
+  // 그 이후엔 MutationObserver로 head 변화 감시
+  var observer = new MutationObserver(function() { inject(); });
   if (document.documentElement) {
     observer.observe(document.documentElement, { childList: true, subtree: true });
   }
@@ -230,12 +245,20 @@ pub fn run() {
                             if let Some(window) = handle.get_webview_window("main") {
                                 let _ = window.navigate(url.parse().unwrap());
 
-                                // 페이지가 로드될 시간을 준 뒤 CSS 주입
-                                thread::sleep(Duration::from_millis(800));
+                                // 1차 주입 후 즉시 윈도우 표시
+                                thread::sleep(Duration::from_millis(600));
                                 let _ = window.eval(THEME_INJECTION_JS);
-
                                 let _ = window.show();
                                 let _ = window.set_focus();
+
+                                // 백그라운드에서 추가 주입 (스크립트 내부 setInterval과 이중 보장)
+                                let win_clone = window.clone();
+                                thread::spawn(move || {
+                                    for delay_ms in [600u64, 1000, 1500, 2000] {
+                                        thread::sleep(Duration::from_millis(delay_ms));
+                                        let _ = win_clone.eval(THEME_INJECTION_JS);
+                                    }
+                                });
                             }
                         } else {
                             eprintln!("Server failed to start within {} seconds", MAX_WAIT_SECS);
