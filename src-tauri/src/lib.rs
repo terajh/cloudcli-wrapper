@@ -44,9 +44,8 @@ const THEME_INJECTION_JS: &str = r#"
     '  --nav-glass-blur: 0px !important;',
     '}',
     'html, body { background-color: #141414 !important; color: #FFFFFF !important; }',
-    /* macOS overlay 타이틀바 — 신호등 버튼 영역 확보 + 드래그 영역 */
-    'body { padding-top: 28px !important; }',
-    /* 상단 28px 영역을 윈도우 드래그 영역으로 만듦 */
+    /* macOS overlay 타이틀바: 신호등 버튼 영역만큼 좌상단 비우기 */
+    /* body::before는 투명한 드래그 영역만 제공 (시각적으로 가리지 않음) */
     'body::before {',
     '  content: "" !important;',
     '  position: fixed !important;',
@@ -54,10 +53,18 @@ const THEME_INJECTION_JS: &str = r#"
     '  left: 0 !important;',
     '  right: 0 !important;',
     '  height: 28px !important;',
-    '  background: #141414 !important;',
+    '  background: transparent !important;',
     '  z-index: 99999 !important;',
     '  -webkit-app-region: drag !important;',
     '  app-region: drag !important;',
+    '}',
+    /* 사이드바 데스크톱 헤더: pt-3 + md:block + pb-2 + px-3 조합으로 매칭 */
+    'div[class*="hidden"][class*="md:block"][class*="pt-3"][class*="pb-2"][class*="px-3"] {',
+    '  padding-top: 40px !important;',
+    '}',
+    /* 메인 콘텐츠 헤더 (탭/세션 정보) */
+    '.pwa-header-safe {',
+    '  padding-top: 36px !important;',
     '}',
     /* 투명도가 있는 background 클래스 모두 불투명 강제 (attribute selector로 매칭) */
     '[class*="bg-background"] { background-color: #141414 !important; }',
