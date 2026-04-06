@@ -2,7 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/nicehash/tauri/v2/crates/tauri-config-schema/schema.json",
   "productName": "Caui",
   "identifier": "dev.cloudcli.desktop",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "build": {
     "frontendDist": "../ui"
   },
