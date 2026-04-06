@@ -68,10 +68,7 @@ const THEME_INJECTION_JS: &str = r#"
     'div[class*="hidden"][class*="md:block"][class*="pt-3"][class*="pb-2"][class*="px-3"] {',
     '  padding-top: 40px !important;',
     '}',
-    /* 메인 콘텐츠 헤더 (탭/세션 정보) */
-    '.pwa-header-safe {',
-    '  padding-top: 36px !important;',
-    '}',
+    /* 메인 콘텐츠 헤더는 좌측 신호등과 겹치지 않으므로 padding 불필요 */
     /* bg-background (불투명 메인) → 검정. /80 같은 투명 변형은 위에서 사이드바로 처리됨 */
     '.bg-background { background-color: #0a0a0a !important; }',
     /* 모든 backdrop-blur 제거 */
