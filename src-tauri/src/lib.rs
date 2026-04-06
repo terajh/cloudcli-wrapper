@@ -51,14 +51,14 @@ const THEME_INJECTION_JS: &str = r#"
     '[class*="backdrop-blur"] { background-color: #1f1f1f !important; }',
     /* 메인 콘텐츠 헤더 (.pwa-header-safe) → 메인과 동일한 회색 */
     '.pwa-header-safe { background-color: #161616 !important; }',
-    /* macOS overlay 타이틀바: 신호등 버튼 영역만큼 좌상단 비우기 */
-    /* body::before는 투명한 드래그 영역만 제공 (시각적으로 가리지 않음) */
+    /* macOS overlay 타이틀바: 좌상단에만 드래그 영역을 두어 traffic lights 커버. */
+    /* 좌측 160px 내에만 배치해 우측 탭 아이콘 클릭/hover를 방해하지 않음. */
     'body::before {',
     '  content: "" !important;',
     '  position: fixed !important;',
     '  top: 0 !important;',
     '  left: 0 !important;',
-    '  right: 0 !important;',
+    '  width: 160px !important;',
     '  height: 28px !important;',
     '  background: transparent !important;',
     '  z-index: 99999 !important;',
