@@ -1,0 +1,14 @@
+{
+  "identifier": "default",
+  "description": "Default capability for CloudCLI desktop",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-show",
+    "core:window:allow-close",
+    "core:window:allow-set-focus"
+  ],
+  "remote": {
+    "urls": ["http://127.0.0.1:*/*"]
+  }
+}

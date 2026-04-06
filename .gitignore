@@ -1,0 +1,8 @@
+# Rust / Tauri build output
+/src-tauri/target/
+
+# Generated icon source
+/src-tauri/app-icon.png
+
+# macOS
+.DS_Store
