@@ -21,25 +21,55 @@ const THEME_INJECTION_JS: &str = r#"
     :root.dark, .dark {
       --background: 0 20% 2.9% !important;
       --foreground: 0 0% 100% !important;
-      --card: 0 15% 5% !important;
+      --card: 0 12% 6% !important;
       --card-foreground: 0 0% 100% !important;
-      --popover: 0 15% 5% !important;
+      --popover: 0 12% 6% !important;
       --popover-foreground: 0 0% 100% !important;
       --primary: 209 100% 60% !important;
       --primary-foreground: 0 0% 100% !important;
-      --secondary: 0 12% 8% !important;
+      --secondary: 0 10% 10% !important;
       --secondary-foreground: 0 0% 100% !important;
-      --muted: 0 12% 8% !important;
-      --muted-foreground: 0 0% 65% !important;
+      --muted: 0 10% 10% !important;
+      --muted-foreground: 0 0% 60% !important;
       --accent: 209 100% 60% !important;
       --accent-foreground: 0 0% 100% !important;
-      --border: 0 10% 12% !important;
-      --input: 0 10% 14% !important;
+      --border: 0 8% 14% !important;
+      --input: 0 8% 14% !important;
       --ring: 209 100% 60% !important;
-      --nav-glass-bg: 0 20% 4% / 0.55 !important;
-      --nav-input-bg: 0 12% 8% / 0.5 !important;
+      --nav-glass-bg: 0 20% 2.9% / 1 !important;
+      --nav-input-bg: 0 10% 10% / 1 !important;
+      --nav-glass-blur: 0px !important;
     }
     html, body { background-color: #090606 !important; color: #FFFFFF !important; }
+
+    /* sidebar root: bg-background/80 backdrop-blur-sm 를 불투명하게 강제 */
+    .bg-background\\/80,
+    .bg-background\\/90,
+    .bg-background\\/70,
+    .bg-background\\/60,
+    .bg-background\\/50 {
+      background-color: #090606 !important;
+    }
+    .backdrop-blur-sm,
+    .backdrop-blur,
+    .backdrop-blur-md,
+    .backdrop-blur-lg,
+    .backdrop-blur-xl {
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+    }
+
+    /* sidebar 내부 카드/버튼 hover/selected: 약간 밝은 톤 */
+    .bg-card { background-color: #100c0c !important; }
+    .bg-muted\\/30 { background-color: rgba(255,255,255,0.03) !important; }
+    .bg-muted\\/40 { background-color: rgba(255,255,255,0.04) !important; }
+    .bg-muted\\/50 { background-color: rgba(255,255,255,0.05) !important; }
+    .bg-muted\\/60 { background-color: rgba(255,255,255,0.07) !important; }
+    .hover\\:bg-muted\\/60:hover { background-color: rgba(255,255,255,0.08) !important; }
+    .hover\\:bg-accent:hover { background-color: rgba(255,255,255,0.06) !important; }
+
+    /* border 색상도 톤 다운 */
+    .border-border { border-color: rgba(255,255,255,0.08) !important; }
   `;
   function inject() {
     if (document.getElementById(STYLE_ID)) return;
