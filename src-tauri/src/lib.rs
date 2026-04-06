@@ -1,4 +1,6 @@
+use std::env;
 use std::net::TcpStream;
+use std::path::PathBuf;
 use std::process::{Child, Command};
 use std::sync::Mutex;
 use std::thread;
@@ -6,23 +8,58 @@ use std::time::{Duration, Instant};
 
 use tauri::Manager;
 
-const CLOUDCLI_DIR: &str = "/Users/carter.p/Dev/kakao/claudecodeui";
-const NODE_BIN: &str = "/Users/carter.p/.nvm/versions/node/v22.9.0/bin/node";
 const SERVER_PORT: u16 = 3001;
 const SERVER_HOST: &str = "127.0.0.1";
 const MAX_WAIT_SECS: u64 = 30;
 
 struct ServerProcess(Mutex<Option<Child>>);
 
-fn spawn_server() -> std::io::Result<Child> {
-    let server_entry = format!("{}/server/index.js", CLOUDCLI_DIR);
+fn cloudcli_dir() -> PathBuf {
+    if let Ok(dir) = env::var("CLOUDCLI_DIR") {
+        return PathBuf::from(dir);
+    }
+    let home = env::var("HOME").unwrap_or_else(|_| String::from("/"));
+    PathBuf::from(home).join(".cloudcli").join("claudecodeui")
+}
 
-    Command::new(NODE_BIN)
+fn find_node() -> String {
+    // PATH에 node가 있으면 그걸 사용. 로그인 셸 PATH를 얻기 위해 zsh -lc 사용
+    if let Ok(output) = Command::new("/bin/zsh")
+        .args(["-lc", "command -v node"])
+        .output()
+    {
+        if output.status.success() {
+            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !path.is_empty() {
+                return path;
+            }
+        }
+    }
+    // fallback: PATH 기반으로 찾기
+    String::from("node")
+}
+
+fn spawn_server() -> std::io::Result<Child> {
+    let dir = cloudcli_dir();
+    let server_entry = dir.join("server").join("index.js");
+    let node = find_node();
+
+    // node 실행에 필요한 PATH 구성 (nvm 등 로그인 셸 PATH 상속)
+    let login_path = Command::new("/bin/zsh")
+        .args(["-lc", "echo $PATH"])
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_string())
+        .unwrap_or_else(|| env::var("PATH").unwrap_or_default());
+
+    Command::new(&node)
         .arg(&server_entry)
-        .current_dir(CLOUDCLI_DIR)
+        .current_dir(&dir)
         .env("SERVER_PORT", SERVER_PORT.to_string())
         .env("HOST", SERVER_HOST)
         .env("NODE_ENV", "production")
+        .env("PATH", login_path)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
