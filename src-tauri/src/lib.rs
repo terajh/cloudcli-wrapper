@@ -133,6 +133,90 @@ const THEME_INJECTION_JS: &str = r#"
   if (document.documentElement) {
     observer.observe(document.documentElement, { childList: true, subtree: true });
   }
+
+  // ──────────────────────────────────────────────────────────
+  // Cmd +/- 폰트 줌 (메인 콘텐츠 영역만, localStorage 영구 저장)
+  // 사이드바는 영향 안 받게 .caui-main-content 마커 클래스를 통해 scope 제한
+  // ──────────────────────────────────────────────────────────
+  var ZOOM_STYLE_ID = '__caui_zoom_style__';
+  var ZOOM_KEY = 'caui_main_zoom';
+  var DEFAULT_ZOOM = 1.0;
+  var MIN_ZOOM = 0.6;
+  var MAX_ZOOM = 2.0;
+  var ZOOM_STEP = 0.1;
+
+  function getZoom() {
+    try {
+      var raw = window.localStorage.getItem(ZOOM_KEY);
+      var v = raw ? parseFloat(raw) : DEFAULT_ZOOM;
+      if (!isFinite(v)) return DEFAULT_ZOOM;
+      return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, v));
+    } catch { return DEFAULT_ZOOM; }
+  }
+
+  // .pwa-header-safe(메인 헤더)의 부모 element를 찾아 .caui-main-content 클래스 부여
+  function tagMainContentRoot() {
+    var headerSafe = document.querySelector('.pwa-header-safe');
+    if (headerSafe && headerSafe.parentElement) {
+      headerSafe.parentElement.classList.add('caui-main-content');
+      return true;
+    }
+    return false;
+  }
+
+  function applyZoom(zoom) {
+    try { window.localStorage.setItem(ZOOM_KEY, String(zoom)); } catch {}
+    tagMainContentRoot();
+    var existing = document.getElementById(ZOOM_STYLE_ID);
+    var css = '.caui-main-content { font-size: ' + (zoom * 100) + '% !important; }';
+    if (existing) {
+      existing.textContent = css;
+    } else {
+      var s = document.createElement('style');
+      s.id = ZOOM_STYLE_ID;
+      s.textContent = css;
+      (document.head || document.documentElement).appendChild(s);
+    }
+  }
+
+  var currentZoom = getZoom();
+  applyZoom(currentZoom);
+  // React 마운트 후에도 보장 (헤더가 늦게 렌더되는 경우)
+  setTimeout(function() { applyZoom(currentZoom); }, 500);
+  setTimeout(function() { applyZoom(currentZoom); }, 1500);
+  setTimeout(function() { applyZoom(currentZoom); }, 3000);
+
+  // SPA 내비게이션이나 동적 마운트에 대응
+  var mainContentObserver = new MutationObserver(function() {
+    if (!document.querySelector('.caui-main-content')) {
+      tagMainContentRoot();
+    }
+  });
+  if (document.body) {
+    mainContentObserver.observe(document.body, { childList: true, subtree: true });
+  }
+
+  function adjustZoom(delta) {
+    currentZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Math.round((currentZoom + delta) * 100) / 100));
+    applyZoom(currentZoom);
+  }
+
+  document.addEventListener('keydown', function(event) {
+    var isMod = event.metaKey || event.ctrlKey;
+    if (!isMod) return;
+    // Cmd+=/Cmd++ (zoom in), Cmd+- (zoom out), Cmd+0 (reset)
+    if (event.key === '=' || event.key === '+') {
+      event.preventDefault();
+      adjustZoom(ZOOM_STEP);
+    } else if (event.key === '-' || event.key === '_') {
+      event.preventDefault();
+      adjustZoom(-ZOOM_STEP);
+    } else if (event.key === '0') {
+      event.preventDefault();
+      currentZoom = DEFAULT_ZOOM;
+      applyZoom(currentZoom);
+    }
+  }, true);
 })();
 "#;
 
