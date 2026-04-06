@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicehash/tauri/v2/crates/tauri-config-schema/schema.json",
-  "productName": "CloudCLI",
+  "productName": "C.UI",
   "identifier": "dev.cloudcli.desktop",
   "version": "0.1.0",
   "build": {
@@ -10,7 +10,7 @@
     "withGlobalTauri": false,
     "windows": [
       {
-        "title": "CloudCLI",
+        "title": "C.UI",
         "width": 1400,
         "height": 900,
         "minWidth": 800,
