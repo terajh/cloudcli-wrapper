@@ -44,6 +44,21 @@ const THEME_INJECTION_JS: &str = r#"
     '  --nav-glass-blur: 0px !important;',
     '}',
     'html, body { background-color: #141414 !important; color: #FFFFFF !important; }',
+    /* macOS overlay 타이틀바 — 신호등 버튼 영역 확보 + 드래그 영역 */
+    'body { padding-top: 28px !important; }',
+    /* 상단 28px 영역을 윈도우 드래그 영역으로 만듦 */
+    'body::before {',
+    '  content: "" !important;',
+    '  position: fixed !important;',
+    '  top: 0 !important;',
+    '  left: 0 !important;',
+    '  right: 0 !important;',
+    '  height: 28px !important;',
+    '  background: #141414 !important;',
+    '  z-index: 99999 !important;',
+    '  -webkit-app-region: drag !important;',
+    '  app-region: drag !important;',
+    '}',
     /* 투명도가 있는 background 클래스 모두 불투명 강제 (attribute selector로 매칭) */
     '[class*="bg-background"] { background-color: #141414 !important; }',
     /* 모든 backdrop-blur 제거 */
