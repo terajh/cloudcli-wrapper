@@ -184,8 +184,8 @@ const THEME_INJECTION_JS: &str = r#"
       try { window.localStorage.setItem(ZOOM_KEY, String(zoom)); } catch (e) {}
       tagMainContentRoot();
       var existing = document.getElementById(ZOOM_STYLE_ID);
-      var css = '.vienna-main-content, .vienna-main-content * { font-size: ' + (zoom * 100) + '% ; }'
-              + '.vienna-main-content { font-size: ' + (zoom * 16) + 'px !important; }';
+      // CSS zoom 속성은 후손에 cascade 누적 없이 한 번만 스케일링됨 (WebKit 지원)
+      var css = '.vienna-main-content { zoom: ' + zoom + '; }';
       if (existing) {
         existing.textContent = css;
       } else {
