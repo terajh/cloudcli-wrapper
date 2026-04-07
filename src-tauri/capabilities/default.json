@@ -1,6 +1,6 @@
 {
   "identifier": "default",
-  "description": "Default capability for Caui desktop",
+  "description": "Default capability for Vienna desktop",
   "windows": ["main"],
   "permissions": [
     "core:default",

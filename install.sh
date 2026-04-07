@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #
-# Caui Desktop Installer
+# Vienna Desktop Installer
 #
 # Tauri 기반 claudecodeui 데스크톱 앱을 설치한다.
-# 사용법: curl -fsSL https://raw.githubusercontent.com/terajh/cloudcli-wrapper/develop/tauri/install.sh | bash
+# 사용법: curl -fsSL https://raw.githubusercontent.com/terajh/vienna/develop/tauri/install.sh | bash
 #        또는 ./install.sh
 
 set -euo pipefail
@@ -11,11 +11,11 @@ set -euo pipefail
 # ─────────────────────────────────────────────
 # 설정
 # ─────────────────────────────────────────────
-INSTALL_DIR="${CLOUDCLI_INSTALL_DIR:-$HOME/.cloudcli}"
+INSTALL_DIR="${VIENNA_INSTALL_DIR:-$HOME/.vienna}"
 CLOUDCLI_REPO="https://github.com/siteboon/claudecodeui.git"
-WRAPPER_REPO="https://github.com/terajh/cloudcli-wrapper.git"
+WRAPPER_REPO="https://github.com/terajh/vienna.git"
 WRAPPER_BRANCH="develop/tauri"
-APP_DEST="/Applications/Caui.app"
+APP_DEST="/Applications/Vienna.app"
 
 # 색상
 BOLD=$'\033[1m'
@@ -38,7 +38,7 @@ if [[ "$(uname)" != "Darwin" ]]; then
   exit 1
 fi
 
-echo "${BOLD}Caui Desktop Installer${RESET}"
+echo "${BOLD}Vienna Desktop Installer${RESET}"
 echo "설치 경로: $INSTALL_DIR"
 echo ""
 
@@ -122,19 +122,19 @@ info "claudecodeui 프론트엔드 빌드 중..."
 ok "claudecodeui 빌드 완료"
 
 # ─────────────────────────────────────────────
-# 6. cloudcli-wrapper 클론
+# 6. vienna 클론
 # ─────────────────────────────────────────────
-WRAPPER_SRC="$INSTALL_DIR/cloudcli-wrapper"
+WRAPPER_SRC="$INSTALL_DIR/vienna"
 if [ -d "$WRAPPER_SRC/.git" ]; then
-  info "cloudcli-wrapper 업데이트 중..."
+  info "vienna 업데이트 중..."
   git -C "$WRAPPER_SRC" fetch origin
   git -C "$WRAPPER_SRC" checkout "$WRAPPER_BRANCH"
   git -C "$WRAPPER_SRC" pull --ff-only
 else
-  info "cloudcli-wrapper 클론 중..."
+  info "vienna 클론 중..."
   git clone --branch "$WRAPPER_BRANCH" "$WRAPPER_REPO" "$WRAPPER_SRC"
 fi
-ok "cloudcli-wrapper 소스 준비 완료"
+ok "vienna 소스 준비 완료"
 
 # ─────────────────────────────────────────────
 # 7. Tauri 앱 빌드
@@ -144,7 +144,7 @@ export CLOUDCLI_DIR="$CLOUDCLI_SRC"
 (cd "$WRAPPER_SRC" && cargo tauri build)
 ok "Tauri 앱 빌드 완료"
 
-BUILT_APP="$WRAPPER_SRC/src-tauri/target/release/bundle/macos/Caui.app"
+BUILT_APP="$WRAPPER_SRC/src-tauri/target/release/bundle/macos/Vienna.app"
 if [ ! -d "$BUILT_APP" ]; then
   err "빌드 결과물을 찾을 수 없습니다: $BUILT_APP"
   exit 1
@@ -166,10 +166,10 @@ xattr -cr "$APP_DEST" 2>/dev/null || true
 
 ok "설치 완료!"
 echo ""
-echo "${BOLD}${GREEN}✓ Caui가 설치되었습니다.${RESET}"
+echo "${BOLD}${GREEN}✓ Vienna가 설치되었습니다.${RESET}"
 echo ""
 echo "  실행: ${BOLD}open $APP_DEST${RESET}"
-echo "  또는 Launchpad에서 'Caui' 검색"
+echo "  또는 Launchpad에서 'Vienna' 검색"
 echo ""
 echo "  claudecodeui 소스: $CLOUDCLI_SRC"
 echo "  wrapper 소스:     $WRAPPER_SRC"

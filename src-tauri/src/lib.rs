@@ -18,7 +18,7 @@ const MAX_WAIT_SECS: u64 = 30;
 // 4) 페이지가 늦게 로드되어도 적용되도록 setInterval로 재주입
 const THEME_INJECTION_JS: &str = r#"
 (function() {
-  var STYLE_ID = '__caui_theme_override__';
+  var STYLE_ID = '__vienna_theme_override__';
   // CSS는 head 맨 마지막에 삽입되므로 자연스럽게 가장 마지막 cascade가 됨
   var CSS = [
     /* CSS 변수 오버라이드 */
@@ -136,10 +136,10 @@ const THEME_INJECTION_JS: &str = r#"
 
   // ──────────────────────────────────────────────────────────
   // Cmd +/- 폰트 줌 (메인 콘텐츠 영역만, localStorage 영구 저장)
-  // 사이드바는 영향 안 받게 .caui-main-content 마커 클래스를 통해 scope 제한
+  // 사이드바는 영향 안 받게 .vienna-main-content 마커 클래스를 통해 scope 제한
   // ──────────────────────────────────────────────────────────
-  var ZOOM_STYLE_ID = '__caui_zoom_style__';
-  var ZOOM_KEY = 'caui_main_zoom';
+  var ZOOM_STYLE_ID = '__vienna_zoom_style__';
+  var ZOOM_KEY = 'vienna_main_zoom';
   var DEFAULT_ZOOM = 1.0;
   var MIN_ZOOM = 0.6;
   var MAX_ZOOM = 2.0;
@@ -154,11 +154,11 @@ const THEME_INJECTION_JS: &str = r#"
     } catch { return DEFAULT_ZOOM; }
   }
 
-  // .pwa-header-safe(메인 헤더)의 부모 element를 찾아 .caui-main-content 클래스 부여
+  // .pwa-header-safe(메인 헤더)의 부모 element를 찾아 .vienna-main-content 클래스 부여
   function tagMainContentRoot() {
     var headerSafe = document.querySelector('.pwa-header-safe');
     if (headerSafe && headerSafe.parentElement) {
-      headerSafe.parentElement.classList.add('caui-main-content');
+      headerSafe.parentElement.classList.add('vienna-main-content');
       return true;
     }
     return false;
@@ -168,7 +168,7 @@ const THEME_INJECTION_JS: &str = r#"
     try { window.localStorage.setItem(ZOOM_KEY, String(zoom)); } catch {}
     tagMainContentRoot();
     var existing = document.getElementById(ZOOM_STYLE_ID);
-    var css = '.caui-main-content { font-size: ' + (zoom * 100) + '% !important; }';
+    var css = '.vienna-main-content { font-size: ' + (zoom * 100) + '% !important; }';
     if (existing) {
       existing.textContent = css;
     } else {
@@ -188,7 +188,7 @@ const THEME_INJECTION_JS: &str = r#"
 
   // SPA 내비게이션이나 동적 마운트에 대응
   var mainContentObserver = new MutationObserver(function() {
-    if (!document.querySelector('.caui-main-content')) {
+    if (!document.querySelector('.vienna-main-content')) {
       tagMainContentRoot();
     }
   });
@@ -223,15 +223,29 @@ const THEME_INJECTION_JS: &str = r#"
 struct ServerProcess(Mutex<Option<Child>>);
 
 fn cloudcli_dir() -> PathBuf {
+    // 신규 환경변수 우선, legacy(CLOUDCLI_DIR) fallback
+    if let Ok(dir) = env::var("VIENNA_DIR") {
+        return PathBuf::from(dir);
+    }
     if let Ok(dir) = env::var("CLOUDCLI_DIR") {
         return PathBuf::from(dir);
     }
     let home = env::var("HOME").unwrap_or_else(|_| String::from("/"));
+    // 신규: ~/.vienna/claudecodeui, legacy fallback: ~/.cloudcli/claudecodeui
+    let new_path = PathBuf::from(&home).join(".vienna").join("claudecodeui");
+    if new_path.exists() {
+        return new_path;
+    }
     PathBuf::from(home).join(".cloudcli").join("claudecodeui")
 }
 
 fn find_node() -> String {
-    // 1. CLOUDCLI_NODE_BIN 환경변수가 있으면 우선 사용
+    // 1. VIENNA_NODE_BIN 또는 legacy CLOUDCLI_NODE_BIN 환경변수가 있으면 우선 사용
+    if let Ok(node) = env::var("VIENNA_NODE_BIN") {
+        if !node.is_empty() {
+            return node;
+        }
+    }
     if let Ok(node) = env::var("CLOUDCLI_NODE_BIN") {
         if !node.is_empty() {
             return node;
@@ -314,8 +328,8 @@ fn spawn_server() -> std::io::Result<Child> {
         format!("{}:{}", prepended.join(":"), shell_path)
     };
 
-    // 서버 stderr/stdout을 ~/Library/Logs/Caui/server.log 에 기록 (디버깅용)
-    let log_dir = PathBuf::from(&home).join("Library").join("Logs").join("Caui");
+    // 서버 stderr/stdout을 ~/Library/Logs/Vienna/server.log 에 기록 (디버깅용)
+    let log_dir = PathBuf::from(&home).join("Library").join("Logs").join("Vienna");
     let _ = std::fs::create_dir_all(&log_dir);
     let log_path = log_dir.join("server.log");
     let stdout_target: Stdio = OpenOptions::new()
@@ -336,7 +350,7 @@ fn spawn_server() -> std::io::Result<Child> {
         use std::io::Write;
         let _ = writeln!(
             f,
-            "\n========== Caui session started @ {:?} ==========",
+            "\n========== Vienna session started @ {:?} ==========",
             std::time::SystemTime::now()
         );
     }
