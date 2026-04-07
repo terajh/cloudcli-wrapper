@@ -150,7 +150,7 @@ const THEME_INJECTION_JS: &str = r#"
     var DEFAULT_ZOOM = 1.0;
     var MIN_ZOOM = 0.6;
     var MAX_ZOOM = 2.0;
-    var ZOOM_STEP = 0.1;
+    var ZOOM_STEP = 0.04;
 
     function getZoom() {
       try {
