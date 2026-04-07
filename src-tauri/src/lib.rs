@@ -7,6 +7,7 @@ use std::sync::Mutex;
 use std::thread;
 use std::time::{Duration, Instant};
 
+use tauri::menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::Manager;
 
 const SERVER_PORT: u16 = 3001;
@@ -135,88 +136,112 @@ const THEME_INJECTION_JS: &str = r#"
   }
 
   // ──────────────────────────────────────────────────────────
-  // Cmd +/- 폰트 줌 (메인 콘텐츠 영역만, localStorage 영구 저장)
-  // 사이드바는 영향 안 받게 .vienna-main-content 마커 클래스를 통해 scope 제한
+  // Cmd +/-/0 폰트 줌 (메인 콘텐츠 영역만, localStorage 영구 저장)
+  // - 사이드바는 영향 안 받게 .vienna-main-content 마커 클래스로 scope 제한
+  // - 가속기는 Rust에서 메뉴로 등록되어 OS 레벨에서 잡히고,
+  //   여기서는 window.__vienna_apply_zoom__ 만 노출해서 메뉴가 호출함
+  // - 추가로 보조 keydown 리스너도 둬서 메뉴가 늦게 붙는 경우 대비
   // ──────────────────────────────────────────────────────────
-  var ZOOM_STYLE_ID = '__vienna_zoom_style__';
-  var ZOOM_KEY = 'vienna_main_zoom';
-  var DEFAULT_ZOOM = 1.0;
-  var MIN_ZOOM = 0.6;
-  var MAX_ZOOM = 2.0;
-  var ZOOM_STEP = 0.1;
+  if (!window.__vienna_zoom_installed__) {
+    window.__vienna_zoom_installed__ = true;
 
-  function getZoom() {
-    try {
-      var raw = window.localStorage.getItem(ZOOM_KEY);
-      var v = raw ? parseFloat(raw) : DEFAULT_ZOOM;
-      if (!isFinite(v)) return DEFAULT_ZOOM;
-      return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, v));
-    } catch { return DEFAULT_ZOOM; }
-  }
+    var ZOOM_STYLE_ID = '__vienna_zoom_style__';
+    var ZOOM_KEY = 'vienna_main_zoom';
+    var DEFAULT_ZOOM = 1.0;
+    var MIN_ZOOM = 0.6;
+    var MAX_ZOOM = 2.0;
+    var ZOOM_STEP = 0.1;
 
-  // .pwa-header-safe(메인 헤더)의 부모 element를 찾아 .vienna-main-content 클래스 부여
-  function tagMainContentRoot() {
-    var headerSafe = document.querySelector('.pwa-header-safe');
-    if (headerSafe && headerSafe.parentElement) {
-      headerSafe.parentElement.classList.add('vienna-main-content');
-      return true;
+    function getZoom() {
+      try {
+        var raw = window.localStorage.getItem(ZOOM_KEY);
+        var v = raw ? parseFloat(raw) : DEFAULT_ZOOM;
+        if (!isFinite(v)) return DEFAULT_ZOOM;
+        return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, v));
+      } catch (e) { return DEFAULT_ZOOM; }
     }
-    return false;
-  }
 
-  function applyZoom(zoom) {
-    try { window.localStorage.setItem(ZOOM_KEY, String(zoom)); } catch {}
-    tagMainContentRoot();
-    var existing = document.getElementById(ZOOM_STYLE_ID);
-    var css = '.vienna-main-content { font-size: ' + (zoom * 100) + '% !important; }';
-    if (existing) {
-      existing.textContent = css;
-    } else {
-      var s = document.createElement('style');
-      s.id = ZOOM_STYLE_ID;
-      s.textContent = css;
-      (document.head || document.documentElement).appendChild(s);
+    // .pwa-header-safe(메인 헤더)의 부모 또는 비-사이드바 main 컨테이너를 찾아 마커 부여
+    function tagMainContentRoot() {
+      var headerSafe = document.querySelector('.pwa-header-safe');
+      if (headerSafe) {
+        var parent = headerSafe.closest('main') || headerSafe.parentElement;
+        if (parent) {
+          parent.classList.add('vienna-main-content');
+          return true;
+        }
+      }
+      // fallback: <main> 태그 또는 #root > div > div:nth-child(2)
+      var main = document.querySelector('main');
+      if (main) {
+        main.classList.add('vienna-main-content');
+        return true;
+      }
+      return false;
     }
-  }
 
-  var currentZoom = getZoom();
-  applyZoom(currentZoom);
-  // React 마운트 후에도 보장 (헤더가 늦게 렌더되는 경우)
-  setTimeout(function() { applyZoom(currentZoom); }, 500);
-  setTimeout(function() { applyZoom(currentZoom); }, 1500);
-  setTimeout(function() { applyZoom(currentZoom); }, 3000);
-
-  // SPA 내비게이션이나 동적 마운트에 대응
-  var mainContentObserver = new MutationObserver(function() {
-    if (!document.querySelector('.vienna-main-content')) {
+    function applyZoom(zoom) {
+      try { window.localStorage.setItem(ZOOM_KEY, String(zoom)); } catch (e) {}
       tagMainContentRoot();
+      var existing = document.getElementById(ZOOM_STYLE_ID);
+      var css = '.vienna-main-content, .vienna-main-content * { font-size: ' + (zoom * 100) + '% ; }'
+              + '.vienna-main-content { font-size: ' + (zoom * 16) + 'px !important; }';
+      if (existing) {
+        existing.textContent = css;
+      } else {
+        var s = document.createElement('style');
+        s.id = ZOOM_STYLE_ID;
+        s.textContent = css;
+        (document.head || document.documentElement).appendChild(s);
+      }
     }
-  });
-  if (document.body) {
-    mainContentObserver.observe(document.body, { childList: true, subtree: true });
-  }
 
-  function adjustZoom(delta) {
-    currentZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Math.round((currentZoom + delta) * 100) / 100));
-    applyZoom(currentZoom);
-  }
+    window.__vienna_zoom_state__ = { current: getZoom() };
+    applyZoom(window.__vienna_zoom_state__.current);
+    setTimeout(function() { applyZoom(window.__vienna_zoom_state__.current); }, 500);
+    setTimeout(function() { applyZoom(window.__vienna_zoom_state__.current); }, 1500);
+    setTimeout(function() { applyZoom(window.__vienna_zoom_state__.current); }, 3000);
 
-  document.addEventListener('keydown', function(event) {
-    var isMod = event.metaKey || event.ctrlKey;
-    if (!isMod) return;
-    // Cmd+=/Cmd++ (zoom in), Cmd+- (zoom out), Cmd+0 (reset)
-    if (event.key === '=' || event.key === '+') {
-      event.preventDefault();
-      adjustZoom(ZOOM_STEP);
-    } else if (event.key === '-' || event.key === '_') {
-      event.preventDefault();
-      adjustZoom(-ZOOM_STEP);
-    } else if (event.key === '0') {
-      event.preventDefault();
-      currentZoom = DEFAULT_ZOOM;
-      applyZoom(currentZoom);
+    // SPA 내비게이션/동적 마운트 대응 (마커가 사라지면 다시 부여)
+    var mainContentObserver = new MutationObserver(function() {
+      if (!document.querySelector('.vienna-main-content')) {
+        tagMainContentRoot();
+      }
+    });
+    if (document.body) {
+      mainContentObserver.observe(document.body, { childList: true, subtree: true });
     }
-  }, true);
+
+    // Rust 메뉴 이벤트가 호출하는 진입점
+    window.__vienna_apply_zoom__ = function(direction) {
+      var state = window.__vienna_zoom_state__;
+      if (direction === 'in') {
+        state.current = Math.min(MAX_ZOOM, Math.round((state.current + ZOOM_STEP) * 100) / 100);
+      } else if (direction === 'out') {
+        state.current = Math.max(MIN_ZOOM, Math.round((state.current - ZOOM_STEP) * 100) / 100);
+      } else if (direction === 'reset') {
+        state.current = DEFAULT_ZOOM;
+      }
+      applyZoom(state.current);
+    };
+
+    // 보조 keydown 리스너 (메뉴 가속기가 동작하지 않는 경우 fallback)
+    document.addEventListener('keydown', function(event) {
+      if (!(event.metaKey || event.ctrlKey)) return;
+      var k = event.key;
+      var c = event.code;
+      if (k === '=' || k === '+' || c === 'Equal') {
+        event.preventDefault();
+        window.__vienna_apply_zoom__('in');
+      } else if (k === '-' || k === '_' || c === 'Minus') {
+        event.preventDefault();
+        window.__vienna_apply_zoom__('out');
+      } else if (k === '0' || c === 'Digit0') {
+        event.preventDefault();
+        window.__vienna_apply_zoom__('reset');
+      }
+    }, true);
+  }
 })();
 "#;
 
@@ -432,6 +457,128 @@ pub fn run() {
     tauri::Builder::default()
         .manage(ServerProcess(Mutex::new(None)))
         .setup(|app| {
+            // ─────────────────────────────────────────
+            // 메뉴 (View > Zoom In/Out/Actual Size 가속기 등록)
+            // 기본 메뉴(File/Edit/Window 등) 위에 우리 줌 항목을 추가한 View 서브메뉴를 얹는다.
+            // 가속기는 OS가 잡아서 menu_event로 전달 → JS로 줌 적용.
+            // ─────────────────────────────────────────
+            let app_handle = app.handle();
+            let pkg_info = app_handle.package_info();
+            let about_metadata = AboutMetadata {
+                name: Some(pkg_info.name.clone()),
+                version: Some(pkg_info.version.to_string()),
+                ..Default::default()
+            };
+
+            let zoom_in = MenuItem::with_id(
+                app_handle,
+                "vienna_zoom_in",
+                "Zoom In",
+                true,
+                Some("CmdOrCtrl+="),
+            )?;
+            let zoom_out = MenuItem::with_id(
+                app_handle,
+                "vienna_zoom_out",
+                "Zoom Out",
+                true,
+                Some("CmdOrCtrl+-"),
+            )?;
+            let zoom_reset = MenuItem::with_id(
+                app_handle,
+                "vienna_zoom_reset",
+                "Actual Size",
+                true,
+                Some("CmdOrCtrl+0"),
+            )?;
+
+            #[cfg(target_os = "macos")]
+            let app_submenu = Submenu::with_items(
+                app_handle,
+                pkg_info.name.clone(),
+                true,
+                &[
+                    &PredefinedMenuItem::about(app_handle, None, Some(about_metadata.clone()))?,
+                    &PredefinedMenuItem::separator(app_handle)?,
+                    &PredefinedMenuItem::services(app_handle, None)?,
+                    &PredefinedMenuItem::separator(app_handle)?,
+                    &PredefinedMenuItem::hide(app_handle, None)?,
+                    &PredefinedMenuItem::hide_others(app_handle, None)?,
+                    &PredefinedMenuItem::show_all(app_handle, None)?,
+                    &PredefinedMenuItem::separator(app_handle)?,
+                    &PredefinedMenuItem::quit(app_handle, None)?,
+                ],
+            )?;
+
+            let edit_submenu = Submenu::with_items(
+                app_handle,
+                "Edit",
+                true,
+                &[
+                    &PredefinedMenuItem::undo(app_handle, None)?,
+                    &PredefinedMenuItem::redo(app_handle, None)?,
+                    &PredefinedMenuItem::separator(app_handle)?,
+                    &PredefinedMenuItem::cut(app_handle, None)?,
+                    &PredefinedMenuItem::copy(app_handle, None)?,
+                    &PredefinedMenuItem::paste(app_handle, None)?,
+                    &PredefinedMenuItem::select_all(app_handle, None)?,
+                ],
+            )?;
+
+            let view_submenu = Submenu::with_items(
+                app_handle,
+                "View",
+                true,
+                &[
+                    &zoom_in,
+                    &zoom_out,
+                    &zoom_reset,
+                    &PredefinedMenuItem::separator(app_handle)?,
+                    &PredefinedMenuItem::fullscreen(app_handle, None)?,
+                ],
+            )?;
+
+            let window_submenu = Submenu::with_items(
+                app_handle,
+                "Window",
+                true,
+                &[
+                    &PredefinedMenuItem::minimize(app_handle, None)?,
+                    &PredefinedMenuItem::maximize(app_handle, None)?,
+                    &PredefinedMenuItem::separator(app_handle)?,
+                    &PredefinedMenuItem::close_window(app_handle, None)?,
+                ],
+            )?;
+
+            #[cfg(target_os = "macos")]
+            let menu = Menu::with_items(
+                app_handle,
+                &[&app_submenu, &edit_submenu, &view_submenu, &window_submenu],
+            )?;
+            #[cfg(not(target_os = "macos"))]
+            let menu = Menu::with_items(
+                app_handle,
+                &[&edit_submenu, &view_submenu, &window_submenu],
+            )?;
+
+            app.set_menu(menu)?;
+
+            app.on_menu_event(|app_handle, event| {
+                let direction = match event.id().as_ref() {
+                    "vienna_zoom_in" => "in",
+                    "vienna_zoom_out" => "out",
+                    "vienna_zoom_reset" => "reset",
+                    _ => return,
+                };
+                if let Some(window) = app_handle.get_webview_window("main") {
+                    let js = format!(
+                        "window.__vienna_apply_zoom__ && window.__vienna_apply_zoom__('{}')",
+                        direction
+                    );
+                    let _ = window.eval(&js);
+                }
+            });
+
             let handle = app.handle().clone();
 
             thread::spawn(move || {
