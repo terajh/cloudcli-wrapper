@@ -222,31 +222,17 @@ const THEME_INJECTION_JS: &str = r#"
 
 struct ServerProcess(Mutex<Option<Child>>);
 
-fn cloudcli_dir() -> PathBuf {
-    // 신규 환경변수 우선, legacy(CLOUDCLI_DIR) fallback
+fn vienna_dir() -> PathBuf {
     if let Ok(dir) = env::var("VIENNA_DIR") {
         return PathBuf::from(dir);
     }
-    if let Ok(dir) = env::var("CLOUDCLI_DIR") {
-        return PathBuf::from(dir);
-    }
     let home = env::var("HOME").unwrap_or_else(|_| String::from("/"));
-    // 신규: ~/.vienna/claudecodeui, legacy fallback: ~/.cloudcli/claudecodeui
-    let new_path = PathBuf::from(&home).join(".vienna").join("claudecodeui");
-    if new_path.exists() {
-        return new_path;
-    }
-    PathBuf::from(home).join(".cloudcli").join("claudecodeui")
+    PathBuf::from(home).join(".vienna").join("claudecodeui")
 }
 
 fn find_node() -> String {
-    // 1. VIENNA_NODE_BIN 또는 legacy CLOUDCLI_NODE_BIN 환경변수가 있으면 우선 사용
+    // 1. VIENNA_NODE_BIN 환경변수가 있으면 우선 사용
     if let Ok(node) = env::var("VIENNA_NODE_BIN") {
-        if !node.is_empty() {
-            return node;
-        }
-    }
-    if let Ok(node) = env::var("CLOUDCLI_NODE_BIN") {
         if !node.is_empty() {
             return node;
         }
@@ -286,7 +272,7 @@ fn find_node() -> String {
 }
 
 fn spawn_server() -> std::io::Result<Child> {
-    let dir = cloudcli_dir();
+    let dir = vienna_dir();
     let server_entry = dir.join("server").join("index.js");
     let node = find_node();
 
@@ -355,13 +341,20 @@ fn spawn_server() -> std::io::Result<Child> {
         );
     }
 
+    // Vienna 데이터 디렉토리 보장 (~/.vienna/auth.db 위치)
+    let vienna_data_dir = PathBuf::from(&home).join(".vienna");
+    let _ = std::fs::create_dir_all(&vienna_data_dir);
+    let database_path = vienna_data_dir.join("auth.db");
+
     let mut cmd = Command::new(&node);
     cmd.arg(&server_entry)
         .current_dir(&dir)
         .env("SERVER_PORT", SERVER_PORT.to_string())
         .env("HOST", SERVER_HOST)
         .env("NODE_ENV", "production")
-        .env("PATH", login_path);
+        .env("PATH", login_path)
+        // 인증 DB는 ~/.vienna/auth.db에 저장
+        .env("DATABASE_PATH", database_path);
 
     // Claude Agent SDK는 spawn한 child가 CLAUDECODE/CLAUDE_CODE_* 등이 보이면
     // "nested session" 에러로 즉시 exit. 부모 셸에서 새어 들어온 모든 Claude 관련
