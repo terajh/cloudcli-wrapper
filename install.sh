@@ -145,7 +145,14 @@ mkdir -p "$INSTALL_DIR"
 
 REINSTALL_DEPS="${VIENNA_REINSTALL_DEPS:-0}"
 
-if [ -d "$CLAUDECODEUI_DIR/.git" ]; then
+if [ -L "$CLAUDECODEUI_DIR" ]; then
+  # 개발자 모드: ~/.vienna/claudecodeui 가 실제 dev 체크아웃을 가리키는
+  # 심볼릭 링크임. 사용자의 작업 트리를 건드리지 않도록 git 동기화를
+  # 통째로 건너뛰고 의존성 설치/빌드만 수행한다.
+  REAL_TARGET="$(readlink "$CLAUDECODEUI_DIR")"
+  warn "claudecodeui 가 심볼릭 링크입니다 → $REAL_TARGET"
+  warn "개발자 환경으로 보입니다. git 동기화를 건너뛰고 현재 체크아웃 그대로 빌드합니다."
+elif [ -d "$CLAUDECODEUI_DIR/.git" ]; then
   info "기존 claudecodeui 업데이트 중 (origin → ${CLAUDECODEUI_BRANCH})..."
 
   # Vienna fork 가 아닌 다른 remote 가 origin 에 박혀 있으면 교정
