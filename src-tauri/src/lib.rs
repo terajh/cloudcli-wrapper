@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 use tauri::menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::Manager;
 
-const SERVER_PORT: u16 = 3001;
+const SERVER_PORT: u16 = 5888;
 const SERVER_HOST: &str = "127.0.0.1";
 const MAX_WAIT_SECS: u64 = 30;
 

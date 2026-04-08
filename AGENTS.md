@@ -6,10 +6,10 @@
 
 ## 1. 프로젝트 한 줄 요약
 
-Vienna는 [claudecodeui](https://github.com/siteboon/claudecodeui)를 macOS 네이티브 앱으로 감싸는 **Tauri v2 래퍼**입니다. Rust 셸이 Node.js Express 서버를 자식 프로세스로 띄우고, WKWebView가 그 서버(`http://127.0.0.1:3001`)를 로드해 React UI를 보여줍니다. `.app` 단독으로는 기능이 없고 `~/.vienna/claudecodeui/` 런타임이 반드시 필요합니다.
+Vienna는 [claudecodeui](https://github.com/siteboon/claudecodeui)를 macOS 네이티브 앱으로 감싸는 **Tauri v2 래퍼**입니다. Rust 셸이 Node.js Express 서버를 자식 프로세스로 띄우고, WKWebView가 그 서버(`http://127.0.0.1:5888`)를 로드해 React UI를 보여줍니다. `.app` 단독으로는 기능이 없고 `~/.vienna/claudecodeui/` 런타임이 반드시 필요합니다.
 
 - **플랫폼**: macOS Apple Silicon (arm64) only
-- **포트**: **`3001`** (하드코딩, `src-tauri/src/lib.rs:13` — `const SERVER_PORT: u16 = 3001`)
+- **포트**: **`5888`** (하드코딩, `src-tauri/src/lib.rs:13` — `const SERVER_PORT: u16 = 5888`)
 - **호스트**: `127.0.0.1` (`SERVER_HOST` 상수)
 - **번들 ID**: `dev.vienna.desktop`
 - **현재 버전**: `tauri.conf.json` + `src-tauri/Cargo.toml` 참조 (단일 소스 of truth)
@@ -44,7 +44,7 @@ vienna/
 │   │   ├── stores/useSessionStore  # 세션 슬롯 + promoteSession + peekSlot
 │   │   └── i18n/                   # ko/en/ja/de/ru/zh-CN
 │   ├── server/                     # Express + node-pty
-│   │   ├── index.js                # 서버 엔트리 (포트 3001)
+│   │   ├── index.js                # 서버 엔트리 (포트 5888)
 │   │   ├── claude-sdk.js           # Claude Agent SDK 연동 (stream_event unwrap)
 │   │   ├── cursor-cli.js           # cursor-agent PTY
 │   │   ├── openai-codex.js         # codex PTY
@@ -85,7 +85,7 @@ v0.6.0 부터 claudecodeui fork(`terajh/claudecodeui`)를 이 레포의 `app/` �
 │   • setup()              │
 │   • spawn_server()       │  ── spawn node ~/.vienna/claudecodeui/server/index.js
 │   • wait_for_server      │
-│   • webview.navigate()   │     http://127.0.0.1:3001 로 리다이렉트
+│   • webview.navigate()   │     http://127.0.0.1:5888 로 리다이렉트
 └──────────────────────────┘
        │
        ▼
@@ -116,7 +116,7 @@ v0.6.0 부터 claudecodeui fork(`terajh/claudecodeui`)를 이 레포의 `app/` �
 
 ### 환경 변수 (Vienna가 spawn 시 주입)
 
-- `SERVER_PORT=3001`, `HOST=127.0.0.1`, `NODE_ENV=production`
+- `SERVER_PORT=5888`, `HOST=127.0.0.1`, `NODE_ENV=production`
 - `DATABASE_PATH=~/.vienna/auth.db`
 - `PATH` — interactive zsh PATH + `~/.local/bin` + `~/.cargo/bin` + `/opt/homebrew/bin` + `/usr/local/bin` 병합
 - `CLAUDECODE`, `CLAUDE_CODE_*`, `ANTHROPIC_*` 환경변수는 **명시적으로 제거** (부모 셸에서 새어 들어오면 Claude SDK가 "nested session" 에러로 즉시 exit)
@@ -139,7 +139,7 @@ cd app
 pnpm install           # 첫 실행만
 pnpm dev               # Express 서버 + Vite dev 서버 모두 기동
 # → http://localhost:5173 (Vite HMR)
-# → http://localhost:3001 (Express API + WS)
+# → http://localhost:5888 (Express API + WS)
 ```
 
 빠른 이터레이션용. React 수정만 할 때는 이게 압도적으로 빠릅니다.
@@ -175,7 +175,7 @@ pnpm lint              # eslint
 
 ```bash
 cd app
-SERVER_PORT=3001 DATABASE_PATH=~/.vienna/auth.db node server/index.js
+SERVER_PORT=5888 DATABASE_PATH=~/.vienna/auth.db node server/index.js
 ```
 
 ---
@@ -387,7 +387,7 @@ pkill -9 -x Vienna; pkill -9 -f "vienna/app/server"; sleep 2; open /Applications
 tail -f ~/Library/Logs/Vienna/server.log
 
 # 서버 health check
-curl -sS -o /dev/null -w "HTTP %{http_code}\n" http://127.0.0.1:3001
+curl -sS -o /dev/null -w "HTTP %{http_code}\n" http://127.0.0.1:5888
 
 # Node v24 에서 native binding rebuild (v20 -> v24 ABI mismatch 시)
 cd app && /Users/carter.p/.nvm/versions/node/v24.3.0/bin/npm rebuild better-sqlite3
