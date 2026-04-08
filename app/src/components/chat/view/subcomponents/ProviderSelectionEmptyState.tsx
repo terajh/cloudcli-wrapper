@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import SessionProviderLogo from "../../../llm-logo-provider/SessionProviderLogo";
@@ -119,6 +119,20 @@ export default function ProviderSelectionEmptyState({
     defaultValue: "Start the next task",
   });
 
+  const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isModelDropdownOpen) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsModelDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isModelDropdownOpen]);
+
   const selectProvider = (next: SessionProvider) => {
     setProvider(next);
     localStorage.setItem("selected-provider", next);
@@ -217,22 +231,43 @@ export default function ProviderSelectionEmptyState({
               <span className="text-sm text-muted-foreground">
                 {t("providerSelection.selectModel")}
               </span>
-              <div className="relative">
-                <select
-                  value={currentModel}
-                  onChange={(e) => handleModelChange(e.target.value)}
-                  tabIndex={-1}
-                  className="cursor-pointer appearance-none rounded-lg border border-border/60 bg-muted/50 py-1.5 pl-3 pr-7 text-sm font-medium text-foreground transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/20"
+              <div className="relative" ref={dropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsModelDropdownOpen((prev) => !prev)}
+                  className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-border/60 bg-muted/50 py-1.5 pl-3 pr-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted focus:outline-none"
                 >
-                  {modelConfig.OPTIONS.map(
-                    ({ value, label }: { value: string; label: string }) => (
-                      <option key={value + label} value={value}>
-                        {label}
-                      </option>
-                    ),
-                  )}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+                  <span>{modelConfig.OPTIONS.find((o: { value: string; label: string }) => o.value === currentModel)?.label ?? currentModel}</span>
+                  <ChevronDown
+                    className={`h-3.5 w-3.5 text-muted-foreground transition-transform duration-150 ${isModelDropdownOpen ? 'rotate-180' : ''}`}
+                  />
+                </button>
+
+                {isModelDropdownOpen && (
+                  <div className="absolute left-1/2 top-full z-50 mt-1.5 min-w-[160px] -translate-x-1/2 overflow-hidden rounded-xl border border-border/60 bg-card shadow-xl">
+                    {modelConfig.OPTIONS.map(({ value, label }: { value: string; label: string }) => {
+                      const isActive = value === currentModel;
+                      return (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => {
+                            handleModelChange(value);
+                            setIsModelDropdownOpen(false);
+                          }}
+                          className={`flex w-full items-center justify-between px-3.5 py-2 text-left text-sm transition-colors hover:bg-muted/70 ${
+                            isActive ? 'bg-muted/40 font-semibold text-foreground' : 'text-foreground/80'
+                          }`}
+                        >
+                          <span>{label}</span>
+                          {isActive && (
+                            <Check className="ml-3 h-3.5 w-3.5 flex-shrink-0 text-primary" strokeWidth={2.5} />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
 

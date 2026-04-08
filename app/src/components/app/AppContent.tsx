@@ -82,6 +82,44 @@ export default function AppContent() {
     };
   }, [openSettings]);
 
+  // Sidebar zoom: mirror __vienna_apply_zoom__ to .vienna-sidebar so that
+  // Cmd+= / Cmd+- / Cmd+0 also scales the sidebar font size.
+  useEffect(() => {
+    const applySidebarZoom = () => {
+      const zoom = (window as Record<string, unknown>).__vienna_zoom_state__ as { current?: number } | undefined;
+      const level = zoom?.current ?? 1;
+      const el = document.querySelector('.vienna-sidebar') as HTMLElement | null;
+      if (el) {
+        el.style.zoom = String(level);
+      }
+    };
+
+    const wrap = () => {
+      const w = window as Record<string, unknown>;
+      if (typeof w.__vienna_apply_zoom__ !== 'function') return false;
+      if ((w.__vienna_apply_zoom__ as { __sidebar_patched__?: boolean }).__sidebar_patched__) {
+        applySidebarZoom();
+        return true;
+      }
+      const original = w.__vienna_apply_zoom__ as (direction: string) => void;
+      const patched = (direction: string) => {
+        original(direction);
+        applySidebarZoom();
+      };
+      (patched as { __sidebar_patched__?: boolean }).__sidebar_patched__ = true;
+      w.__vienna_apply_zoom__ = patched;
+      applySidebarZoom();
+      return true;
+    };
+
+    if (!wrap()) {
+      const interval = setInterval(() => {
+        if (wrap()) clearInterval(interval);
+      }, 100);
+      return () => clearInterval(interval);
+    }
+  }, []);
+
   useEffect(() => {
     if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
       return undefined;
@@ -168,7 +206,7 @@ export default function AppContent() {
         aria-hidden="true"
       />
       {!isMobile ? (
-        <div className="h-full flex-shrink-0 border-r border-border/50">
+        <div className="vienna-sidebar h-full flex-shrink-0 border-r border-border/50">
           <Sidebar {...sidebarSharedProps} />
         </div>
       ) : (
