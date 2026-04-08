@@ -10,12 +10,12 @@
 #   3. npm install --omit=dev 로 production 의존성만 설치
 #
 # 사용법:
-#   curl -fsSL https://github.com/terajh/vienna/releases/download/v0.6.1/install.sh | bash
+#   curl -fsSL https://github.com/terajh/vienna/releases/download/v0.6.2/install.sh | bash
 #   또는
 #   ./install.sh
 #
 # 환경변수:
-#   VIENNA_VERSION         설치할 버전 태그       (기본: v0.6.1)
+#   VIENNA_VERSION         설치할 버전 태그       (기본: v0.6.2)
 #   VIENNA_INSTALL_DIR     runtime 설치 위치      (기본: ~/.vienna)
 #   VIENNA_REINSTALL_DEPS  1 이면 node_modules 재설치 강제
 
@@ -24,7 +24,7 @@ set -euo pipefail
 # ─────────────────────────────────────────────
 # 설정
 # ─────────────────────────────────────────────
-VERSION="${VIENNA_VERSION:-v0.6.1}"
+VERSION="${VIENNA_VERSION:-v0.6.2}"
 DMG_NAME="Vienna_${VERSION#v}_aarch64.dmg"
 TARBALL_NAME="claudecodeui-runtime-${VERSION#v}.tar.gz"
 RELEASE_BASE="https://github.com/terajh/vienna/releases/download/${VERSION}"
