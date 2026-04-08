@@ -26,7 +26,7 @@ set -euo pipefail
 # ─────────────────────────────────────────────
 VERSION="${VIENNA_VERSION:-v0.6.2}"
 DMG_NAME="Vienna_${VERSION#v}_aarch64.dmg"
-TARBALL_NAME="claudecodeui-runtime-${VERSION#v}.tar.gz"
+TARBALL_NAME="vienna-runtime-${VERSION#v}.tar.gz"
 RELEASE_BASE="https://github.com/terajh/vienna/releases/download/${VERSION}"
 DMG_URL="${RELEASE_BASE}/${DMG_NAME}"
 TARBALL_URL="${RELEASE_BASE}/${TARBALL_NAME}"

@@ -30,7 +30,7 @@ STAGING_DIR="$VIENNA_DIR/release-staging"
 
 VERSION="${VIENNA_VERSION:-$(grep '"version"' "$TAURI_DIR/tauri.conf.json" | head -1 | sed 's/.*"version": *"\([^"]*\)".*/\1/')}"
 DMG_NAME="Vienna_${VERSION}_aarch64.dmg"
-TARBALL_NAME="claudecodeui-runtime-${VERSION}.tar.gz"
+TARBALL_NAME="vienna-runtime-${VERSION}.tar.gz"
 
 # 색상
 BOLD=$'\033[1m'; RED=$'\033[31m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'; BLUE=$'\033[34m'; RESET=$'\033[0m'
