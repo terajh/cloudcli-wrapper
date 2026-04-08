@@ -20,37 +20,33 @@ Vienna runs the entire claudecodeui frontend + Express server inside a Tauri (Ru
 
 ## Install
 
-Apple Silicon macOS, Node.js 18+ required.
+Apple Silicon macOS only. Choose one of the two paths.
 
-**Open Terminal** (Spotlight ⌘+Space → type "Terminal" → Enter) and paste:
+### Option A — bundled installer (recommended, no terminal, no internet during install)
+
+1. Download [`Vienna-installer-0.6.2.zip`](https://github.com/terajh/vienna/releases/download/v0.6.2/Vienna-installer-0.6.2.zip) (~136MB) from the release.
+2. Double-click the zip in Finder → it extracts a `Vienna-installer-0.6.2/` folder.
+3. Inside that folder, double-click **`install.sh`**.
+   - **First-time Gatekeeper warning** ("could not be verified") is normal for unsigned scripts. Bypass once: right-click `install.sh` → **Open** → confirm. After this any future download from the same machine works without the dialog.
+4. A Terminal window opens, the installer copies `Vienna.app` into `/Applications`, drops the runtime into `~/.vienna/claudecodeui`, and launches Vienna. Done.
+
+The zip already contains everything: the `Vienna.app` shell, the prebuilt React frontend, the Express server, and a `node_modules/` with production dependencies (including the native `node-pty` and `better-sqlite3` binaries). **No `npm install`, no internet, no `git clone` happens during install.**
+
+### Option B — terminal one-liner (smaller download, needs internet)
 
 ```bash
 curl -fsSL https://github.com/terajh/vienna/releases/download/v0.6.2/install.sh | bash
 ```
 
-That's it. The script will download the DMG, install the app into `/Applications`, and set up the runtime. After it finishes:
-
-```bash
-open /Applications/Vienna.app
-```
-
-or just search "Vienna" in Spotlight.
+This variant downloads `Vienna_0.6.2_aarch64.dmg` (3.4MB) + `vienna-runtime-0.6.2.tar.gz` (5.5MB) on the fly and runs `npm install --omit=dev` on your machine. Smaller download, but needs npm + internet. There's no Gatekeeper dialog because piped-from-stdin shell scripts are not subject to quarantine.
 
 ### What the installer does
 
-1. Downloads `Vienna_0.6.2_aarch64.dmg` and `vienna-runtime-0.6.2.tar.gz` from the release.
-2. Copies `Vienna.app` into `/Applications` and strips the macOS quarantine flag.
-3. Extracts the runtime (pre-built `dist/` + Express server) into `~/.vienna/claudecodeui` — no `git clone`, no frontend build.
-4. Runs `npm install --omit=dev --ignore-scripts` (skips dev-only `husky` etc.) and then explicitly runs `scripts/fix-node-pty.js` so PTY sessions work.
-5. Backs up the previous install (with `auth.db`) before swapping in the new runtime.
-
-If you prefer to run it step-by-step instead of piping to bash, download [`install.sh`](https://github.com/terajh/vienna/releases/download/v0.6.2/install.sh) directly and then:
-
-```bash
-bash ~/Downloads/install.sh
-```
-
-(Browser-downloaded `.sh` files lose their +x bit on macOS, so `bash <file>` is the way to run them without `chmod +x` first.)
+1. Stops any running `Vienna` process.
+2. Copies `Vienna.app` into `/Applications` and clears the macOS quarantine flag.
+3. Drops the runtime (`Vienna.app` shell + prebuilt React frontend + Express server + `node_modules/`) into `~/.vienna/claudecodeui`.
+4. Restores `auth.db` from any previous install so logged-in sessions survive upgrades.
+5. Launches `/Applications/Vienna.app`.
 
 ## Features
 

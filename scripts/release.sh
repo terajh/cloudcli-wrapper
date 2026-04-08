@@ -173,10 +173,86 @@ tar -czf "$OUTPUT_DIR/$TARBALL_NAME" -C "$STAGING_DIR" claudecodeui
 ok "runtime tarball: $OUTPUT_DIR/$TARBALL_NAME ($(du -h "$OUTPUT_DIR/$TARBALL_NAME" | cut -f1))"
 
 # ─────────────────────────────────────────────
-# 4. install.sh 도 staging 으로
+# 4. install.sh 도 staging 으로 (curl 기반 원격 인스톨러)
 # ─────────────────────────────────────────────
 cp "$VIENNA_DIR/install.sh" "$OUTPUT_DIR/install.sh"
-ok "install.sh 복사"
+ok "install.sh 복사 (curl 기반)"
+
+# ─────────────────────────────────────────────
+# 5. 자급 번들 zip (Choonnobi 패턴)
+# ─────────────────────────────────────────────
+# `Vienna-installer-X.Y.Z.zip` 안에 다음을 모두 포함:
+#   Vienna-installer-X.Y.Z/
+#   ├── Vienna.app                  (Tauri 셸)
+#   ├── claudecodeui/               (서버 + dist + production node_modules)
+#   └── install.sh                  (옆 파일들을 그대로 이식하는 자급 인스톨러)
+#
+# 사용자는 zip 다운 → 더블클릭으로 풀기 → install.sh 더블클릭 → 끝.
+# 인터넷 다운로드/추가 명령 없음. 첫 실행 시 Gatekeeper "악성 코드 없음
+# 확인 불가" 경고는 우클릭 → 열기로 1회 우회해야 한다 (서명 안 된 모든
+# macOS 바이너리의 공통 동작).
+BUNDLE_INSTALL_SOURCE="$VIENNA_DIR/scripts/install-bundled.sh"
+if [ ! -f "$BUNDLE_INSTALL_SOURCE" ]; then
+  warn "scripts/install-bundled.sh 가 없어 번들 zip 패키징을 건너뜁니다."
+else
+  BUNDLE_NAME="Vienna-installer-${VERSION}"
+  BUNDLE_DIR="$STAGING_DIR/$BUNDLE_NAME"
+  mkdir -p "$BUNDLE_DIR/claudecodeui"
+
+  info "번들: Vienna.app 복사..."
+  cp -R "$TAURI_DIR/target/release/bundle/macos/Vienna.app" "$BUNDLE_DIR/"
+  xattr -cr "$BUNDLE_DIR/Vienna.app" 2>/dev/null || true
+
+  info "번들: claudecodeui 소스 rsync (node_modules 제외)..."
+  rsync -a \
+    --exclude='node_modules' \
+    --exclude='.git' \
+    --exclude='auth.db' \
+    --exclude='auth.db-journal' \
+    --exclude='*.log' \
+    --exclude='.DS_Store' \
+    --exclude='.env' \
+    --exclude='.env.local' \
+    --exclude='.env.*.local' \
+    --exclude='coverage' \
+    --exclude='.vite' \
+    --exclude='.cache' \
+    --exclude='playwright-report' \
+    --exclude='test-results' \
+    --exclude='temp' \
+    --exclude='tmp' \
+    --exclude='logs' \
+    "$APP_DIR/" "$BUNDLE_DIR/claudecodeui/"
+
+  info "번들: dev-only lifecycle hook(prepare 등) 제거..."
+  node -e "
+    const fs = require('fs');
+    const path = '$BUNDLE_DIR/claudecodeui/package.json';
+    const pkg = JSON.parse(fs.readFileSync(path, 'utf8'));
+    pkg.scripts = pkg.scripts || {};
+    for (const key of ['prepare', 'precommit', 'commitmsg']) delete pkg.scripts[key];
+    fs.writeFileSync(path, JSON.stringify(pkg, null, 2) + '\n');
+  "
+
+  info "번들: production 의존성 설치 (npm install --omit=dev)..."
+  ( cd "$BUNDLE_DIR/claudecodeui" && HUSKY=0 npm install --omit=dev --ignore-scripts --no-audit --no-fund 2>&1 | tail -3 )
+
+  info "번들: node-pty 권한 fix..."
+  ( cd "$BUNDLE_DIR/claudecodeui" && node scripts/fix-node-pty.js 2>&1 | tail -2 ) || warn "fix-node-pty.js 실패 (PTY 사용 시 권한 문제 가능)"
+
+  info "번들: install.sh 복사..."
+  cp "$BUNDLE_INSTALL_SOURCE" "$BUNDLE_DIR/install.sh"
+  chmod +x "$BUNDLE_DIR/install.sh"
+
+  BUNDLE_ZIP_NAME="${BUNDLE_NAME}.zip"
+  BUNDLE_ZIP_PATH="$OUTPUT_DIR/$BUNDLE_ZIP_NAME"
+  rm -f "$BUNDLE_ZIP_PATH"
+
+  info "번들 zip 패키징 (zip -qry, +x 보존)..."
+  ( cd "$STAGING_DIR" && zip -qry --symlinks "$BUNDLE_ZIP_PATH" "$BUNDLE_NAME" )
+
+  ok "자급 번들 zip: $BUNDLE_ZIP_PATH ($(du -h "$BUNDLE_ZIP_PATH" | cut -f1))"
+fi
 
 rm -rf "$STAGING_DIR"
 
