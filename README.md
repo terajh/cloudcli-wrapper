@@ -7,16 +7,8 @@ Vienna runs the entire claudecodeui frontend + Express server inside a Tauri (Ru
 ## Screenshots
 
 <!-- Replace these with your own captures from the running app. -->
+<img width="1840" height="1195" alt="image" src="https://github.com/user-attachments/assets/104658f1-e3af-47d9-b0de-2ca3ecde4cfe" />
 
-<p align="center">
-  <img src="docs/screenshots/main.png" alt="Vienna main chat view" width="900" />
-</p>
-
-<p align="center">
-  <img src="docs/screenshots/sidebar.png" alt="Sidebar with multi-project + threads-style sessions" width="320" />
-  &nbsp;&nbsp;
-  <img src="docs/screenshots/streaming.png" alt="Token-by-token streaming with optimistic placeholder" width="560" />
-</p>
 
 ## Install
 
