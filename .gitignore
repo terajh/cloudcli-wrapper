@@ -6,3 +6,6 @@
 
 # macOS
 .DS_Store
+
+# Tauri-generated build artifacts (capabilities schemas etc.)
+src-tauri/gen/
