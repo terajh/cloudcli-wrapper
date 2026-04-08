@@ -276,6 +276,7 @@ function Sidebar({
             onCreateProject={() => setShowNewProject(true)}
             onOpenProjectFilter={() => setShowProjectFilter(true)}
             onCollapseSidebar={handleCollapseSidebar}
+            onNewSession={() => { if (selectedProject) onNewSession(selectedProject); }}
             updateAvailable={updateAvailable}
             releaseInfo={releaseInfo}
             latestVersion={latestVersion}

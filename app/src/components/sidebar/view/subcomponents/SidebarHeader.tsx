@@ -1,4 +1,4 @@
-import { Filter, Folder, FolderPlus, MessageSquare, Plus, RefreshCw, Search, X, PanelLeftClose } from 'lucide-react';
+import { Filter, Folder, FolderPlus, MessageSquare, Plus, RefreshCw, Search, X, PanelLeftClose, SquarePen } from 'lucide-react';
 import type { TFunction } from 'i18next';
 import { Button, Input } from '../../../../shared/view/ui';
 import { IS_PLATFORM } from '../../../../constants/config';
@@ -21,6 +21,7 @@ type SidebarHeaderProps = {
   onCreateProject: () => void;
   onOpenProjectFilter: () => void;
   onCollapseSidebar: () => void;
+  onNewSession: () => void;
   t: TFunction;
 };
 
@@ -39,39 +40,25 @@ export default function SidebarHeader({
   onCreateProject,
   onOpenProjectFilter,
   onCollapseSidebar,
+  onNewSession,
   t,
 }: SidebarHeaderProps) {
-  const LogoBlock = () => (
-    <div className="flex min-w-0 items-center gap-2.5">
-      <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-primary/90 shadow-sm">
-        <svg className="h-3.5 w-3.5 text-primary-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-        </svg>
-      </div>
-      <h1 className="truncate text-sm font-semibold tracking-tight text-foreground">{t('app.title')}</h1>
-    </div>
-  );
-
   return (
     <div className="flex-shrink-0">
       {/* Desktop header */}
-      <div
-        className="hidden px-3 pb-2 pt-3 md:block"
-        style={{}}
-      >
+      <div className="hidden px-2.5 pb-2 pt-8 md:block">
         <div className="flex items-center justify-between gap-2">
-          {IS_PLATFORM ? (
-            <a
-              href="https://cloudcli.ai/dashboard"
-              className="flex min-w-0 items-center gap-2.5 transition-opacity hover:opacity-80"
-              title={t('tooltips.viewEnvironments')}
-            >
-              <LogoBlock />
-            </a>
-          ) : (
-            <LogoBlock />
-          )}
+          {/* 새 스레드 버튼 — 좌측 */}
+          <button
+            onClick={onNewSession}
+            className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground"
+            title="새 스레드"
+          >
+            <SquarePen className="h-3.5 w-3.5" />
+            <span>새 스레드</span>
+          </button>
 
+          {/* 우측 액션 버튼들 */}
           <div className="flex flex-shrink-0 items-center gap-0.5">
             <Button
               variant="ghost"
@@ -81,11 +68,7 @@ export default function SidebarHeader({
               disabled={isRefreshing}
               title={t('tooltips.refresh')}
             >
-              <RefreshCw
-                className={`h-3.5 w-3.5 ${
-                  isRefreshing ? 'animate-spin' : ''
-                }`}
-              />
+              <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
             </Button>
             <Button
               variant="ghost"
@@ -116,7 +99,6 @@ export default function SidebarHeader({
             </Button>
           </div>
         </div>
-
       </div>
 
       {/* Desktop divider */}
@@ -128,17 +110,13 @@ export default function SidebarHeader({
         style={isPWA && isMobile ? { paddingTop: '16px' } : {}}
       >
         <div className="flex items-center justify-between">
-          {IS_PLATFORM ? (
-            <a
-              href="https://cloudcli.ai/dashboard"
-              className="flex min-w-0 items-center gap-2.5 transition-opacity active:opacity-70"
-              title={t('tooltips.viewEnvironments')}
-            >
-              <LogoBlock />
-            </a>
-          ) : (
-            <LogoBlock />
-          )}
+          <button
+            onClick={onNewSession}
+            className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground active:scale-95"
+          >
+            <SquarePen className="h-3.5 w-3.5" />
+            <span>새 스레드</span>
+          </button>
 
           <div className="flex flex-shrink-0 gap-1.5">
             <button
@@ -147,12 +125,6 @@ export default function SidebarHeader({
               disabled={isRefreshing}
             >
               <RefreshCw className={`h-4 w-4 text-muted-foreground ${isRefreshing ? 'animate-spin' : ''}`} />
-            </button>
-            <button
-              className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/90 text-primary-foreground transition-all active:scale-95"
-              onClick={onCreateProject}
-            >
-              <FolderPlus className="h-4 w-4" />
             </button>
           </div>
         </div>

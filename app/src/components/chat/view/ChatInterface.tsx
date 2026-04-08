@@ -436,6 +436,7 @@ function ChatInterface({
           isTextareaExpanded={isTextareaExpanded}
           sendByCtrlEnter={sendByCtrlEnter}
           onTranscript={handleTranscript}
+          projectPath={selectedProject.fullPath || selectedProject.path || ''}
         />
       </div>
 

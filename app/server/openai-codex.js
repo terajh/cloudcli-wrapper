@@ -160,28 +160,25 @@ function transformCodexEvent(event) {
 }
 
 /**
- * Map permission mode to Codex SDK options
+ * Map permission mode to Codex SDK options.
+ *
+ * NOTE: `approvalPolicy` is intentionally omitted. The @openai/codex-sdk
+ * (v0.101.x) maps it to --approval-policy, but codex CLI ≥0.112 removed
+ * that flag. Passing it causes an "unexpected argument" error that kills the
+ * subprocess silently. sandboxMode alone is sufficient for access control.
+ *
  * @param {string} permissionMode - 'default', 'acceptEdits', or 'bypassPermissions'
- * @returns {object} - { sandboxMode, approvalPolicy }
+ * @returns {object} - { sandboxMode }
  */
 function mapPermissionModeToCodexOptions(permissionMode) {
   switch (permissionMode) {
     case 'acceptEdits':
-      return {
-        sandboxMode: 'workspace-write',
-        approvalPolicy: 'never'
-      };
+      return { sandboxMode: 'workspace-write' };
     case 'bypassPermissions':
-      return {
-        sandboxMode: 'danger-full-access',
-        approvalPolicy: 'never'
-      };
+      return { sandboxMode: 'danger-full-access' };
     case 'default':
     default:
-      return {
-        sandboxMode: 'workspace-write',
-        approvalPolicy: 'untrusted'
-      };
+      return { sandboxMode: 'workspace-write' };
   }
 }
 
@@ -202,24 +199,24 @@ export async function queryCodex(command, options = {}, ws) {
   } = options;
 
   const workingDirectory = cwd || projectPath || process.cwd();
-  const { sandboxMode, approvalPolicy } = mapPermissionModeToCodexOptions(permissionMode);
+  const { sandboxMode } = mapPermissionModeToCodexOptions(permissionMode);
 
   let codex;
   let thread;
   let currentSessionId = sessionId;
   let terminalFailure = null;
+  let receivedAnyEvent = false;
   const abortController = new AbortController();
 
   try {
     // Initialize Codex SDK
     codex = new Codex();
 
-    // Thread options with sandbox and approval settings
+    // Thread options — do NOT include approvalPolicy; codex CLI ≥0.112 removed the flag.
     const threadOptions = {
       workingDirectory,
       skipGitRepoCheck: true,
       sandboxMode,
-      approvalPolicy,
       model
     };
 
@@ -257,6 +254,8 @@ export async function queryCodex(command, options = {}, ws) {
         break;
       }
 
+      receivedAnyEvent = true;
+
       if (event.type === 'item.started' || event.type === 'item.updated') {
         continue;
       }
@@ -287,9 +286,19 @@ export async function queryCodex(command, options = {}, ws) {
       }
     }
 
+    // If codex subprocess exited without producing any events, it likely failed
+    // silently (e.g. unknown CLI flag, auth error). Surface it as an error.
+    if (!receivedAnyEvent && !terminalFailure) {
+      const msg = 'Codex process exited without output. Check that codex CLI is authenticated and the model name is valid.';
+      console.error('[Codex]', msg);
+      terminalFailure = new Error(msg);
+      sendMessage(ws, createNormalizedMessage({ kind: 'error', content: msg, sessionId: currentSessionId, provider: 'codex' }));
+    }
+
     // Send completion event
     if (!terminalFailure) {
-      sendMessage(ws, createNormalizedMessage({ kind: 'complete', actualSessionId: thread.id, sessionId: currentSessionId, provider: 'codex' }));
+      const resolvedSessionId = thread.id || currentSessionId;
+      sendMessage(ws, createNormalizedMessage({ kind: 'complete', actualSessionId: resolvedSessionId, sessionId: currentSessionId, provider: 'codex' }));
       notifyRunStopped({
         userId: ws?.userId || null,
         provider: 'codex',

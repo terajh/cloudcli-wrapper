@@ -92,6 +92,7 @@ interface ChatComposerProps {
   isTextareaExpanded: boolean;
   sendByCtrlEnter?: boolean;
   onTranscript: (text: string) => void;
+  projectPath?: string;
 }
 
 export default function ChatComposer({
@@ -149,6 +150,7 @@ export default function ChatComposer({
   isTextareaExpanded,
   sendByCtrlEnter,
   onTranscript,
+  projectPath,
 }: ChatComposerProps) {
   const { t } = useTranslation('chat');
   const textareaRect = textareaRef.current?.getBoundingClientRect();
@@ -171,6 +173,11 @@ export default function ChatComposer({
   const mobileFloatingClass = isInputFocused
     ? 'max-sm:fixed max-sm:bottom-0 max-sm:left-0 max-sm:right-0 max-sm:z-50 max-sm:bg-background max-sm:shadow-[0_-4px_20px_rgba(0,0,0,0.15)]'
     : '';
+
+  // 홈 디렉토리를 ~ 로 축약한 경로
+  const displayPath = projectPath
+    ? projectPath.replace(/^\/Users\/[^/]+/, '~')
+    : null;
 
   return (
     <div className={`flex-shrink-0 p-2 pb-2 sm:p-4 sm:pb-4 md:p-4 md:pb-6 ${mobileFloatingClass}`}>
@@ -352,6 +359,15 @@ export default function ChatComposer({
           </div>
         </div>
       </form>}
+
+      {/* 세션 작업 경로 표시 */}
+      {displayPath && !hasQuestionPanel && (
+        <div className="mx-auto mt-1.5 max-w-4xl px-1">
+          <p className="truncate text-[10px] text-muted-foreground/40" title={projectPath}>
+            {displayPath}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

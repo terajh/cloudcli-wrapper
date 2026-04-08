@@ -60,6 +60,7 @@ type SidebarContentProps = {
   onCreateProject: () => void;
   onOpenProjectFilter: () => void;
   onCollapseSidebar: () => void;
+  onNewSession: () => void;
   updateAvailable: boolean;
   releaseInfo: ReleaseInfo | null;
   latestVersion: string | null;
@@ -88,6 +89,7 @@ export default function SidebarContent({
   onCreateProject,
   onOpenProjectFilter,
   onCollapseSidebar,
+  onNewSession,
   updateAvailable,
   releaseInfo,
   latestVersion,
@@ -185,6 +187,7 @@ export default function SidebarContent({
         onCreateProject={onCreateProject}
         onOpenProjectFilter={onOpenProjectFilter}
         onCollapseSidebar={onCollapseSidebar}
+        onNewSession={onNewSession}
         t={t}
       />
 
