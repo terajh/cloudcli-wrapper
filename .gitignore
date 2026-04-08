@@ -9,3 +9,25 @@
 
 # Tauri-generated build artifacts (capabilities schemas etc.)
 src-tauri/gen/
+
+# claudecodeui (vienna/app) build & runtime artifacts
+app/node_modules/
+app/dist/
+app/auth.db
+app/auth.db-journal
+app/.env
+app/.env.local
+app/.env.*.local
+app/coverage/
+app/.vite/
+app/.cache/
+app/playwright-report/
+app/test-results/
+app/temp/
+app/tmp/
+app/logs/
+app/*.log
+
+# release artifacts produced by scripts/release.sh
+/release-staging/
+/release-output/
