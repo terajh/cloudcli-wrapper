@@ -156,8 +156,19 @@ export default function SidebarContent({
 
   return (
     <div
-      className="relative flex h-full flex-col bg-background/80 backdrop-blur-sm md:select-none"
-      style={isDesktop ? { width: `${sidebarWidth}px` } : undefined}
+      // Slightly lifted from `bg-background` so the sidebar reads as its own
+      // panel against the chat surface, instead of one solid black slab.
+      // Light layer over `bg-foreground` is the standard "elevated" trick
+      // and respects whatever the user's theme exposes.
+      className="relative flex h-full flex-col bg-background backdrop-blur-sm md:select-none"
+      style={
+        isDesktop
+          ? {
+              width: `${sidebarWidth}px`,
+              backgroundColor: 'color-mix(in srgb, var(--background) 88%, var(--foreground) 12%)',
+            }
+          : undefined
+      }
     >
       <SidebarHeader
         isPWA={isPWA}

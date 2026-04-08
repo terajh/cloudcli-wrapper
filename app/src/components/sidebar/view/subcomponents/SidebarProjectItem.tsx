@@ -119,7 +119,13 @@ export default function SidebarProjectItem({
   };
 
   return (
-    <div className={cn('md:space-y-1', isDeleting && 'opacity-50 pointer-events-none')}>
+    <div
+      className={cn(
+        // mt-2 → 데스크톱 사이드바에서 프로젝트 아이템 사이의 호흡감을 위한 상단 마진.
+        'md:space-y-1 md:mt-2 md:first:mt-0',
+        isDeleting && 'opacity-50 pointer-events-none',
+      )}
+    >
       <div className="md:group group">
         <div className="md:hidden">
           <div

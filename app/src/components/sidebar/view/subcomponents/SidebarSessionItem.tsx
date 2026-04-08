@@ -131,7 +131,7 @@ export default function SidebarSessionItem({
         <Button
           variant="ghost"
           className={cn(
-            'w-full justify-start px-2 py-1.5 h-auto font-normal text-left rounded-md',
+            'w-full justify-start pl-2 pr-1 py-1.5 h-auto font-normal text-left rounded-md',
             'hover:bg-accent/40 transition-colors duration-150',
             isSelected && 'bg-white/[0.06] text-foreground hover:bg-white/[0.09]',
           )}
@@ -141,7 +141,7 @@ export default function SidebarSessionItem({
             setContextMenu({ x: event.clientX, y: event.clientY });
           }}
         >
-          <div className="flex w-full min-w-0 items-center gap-2 pr-7">
+          <div className="flex w-full min-w-0 items-center gap-2">
             <span
               className={cn(
                 'h-1 w-1 flex-shrink-0 rounded-full',
@@ -156,8 +156,21 @@ export default function SidebarSessionItem({
             >
               {sessionView.sessionName}
             </span>
-            <span className="flex-shrink-0 text-[10px] text-muted-foreground/80 transition-opacity duration-150 group-hover:opacity-0">
-              {formatTimeAgo(sessionView.sessionTime, currentTime, t)}
+            {/*
+              Right-edge meta cluster:
+                - provider logo (claude / codex / cursor / gemini)
+                - relative timestamp ("10시간 전") flush to the right
+              On hover the cluster becomes invisible and a same-position
+              trash button takes over (rendered as a sibling absolute below).
+            */}
+            <span className="flex flex-shrink-0 items-center gap-1.5 pr-1 transition-opacity duration-150 group-hover:opacity-0">
+              <SessionProviderLogo
+                provider={session.__provider}
+                className="h-3 w-3 opacity-70"
+              />
+              <span className="text-[10px] tabular-nums text-muted-foreground/80">
+                {formatTimeAgo(sessionView.sessionTime, currentTime, t)}
+              </span>
             </span>
           </div>
         </Button>
@@ -204,14 +217,15 @@ export default function SidebarSessionItem({
         )}
 
         {editingSession !== session.id && !sessionView.isCursorSession && (
-          <div className="pointer-events-none absolute right-2 top-1/2 flex -translate-y-1/2 transform items-center opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+          <div className="pointer-events-none absolute right-1 top-1/2 flex -translate-y-1/2 transform items-center opacity-0 transition-opacity duration-150 group-hover:opacity-100">
             <button
-              className="pointer-events-auto flex h-6 w-6 items-center justify-center rounded bg-background/80 transition-colors hover:bg-red-500/10"
+              className="pointer-events-auto flex h-5 w-5 items-center justify-center rounded transition-colors hover:bg-red-500/15"
               onClick={(event) => {
                 event.stopPropagation();
                 requestDeleteSession();
               }}
               title={t('tooltips.deleteSession')}
+              aria-label={t('tooltips.deleteSession')}
             >
               <Trash2 className="h-3 w-3 text-red-500" />
             </button>
