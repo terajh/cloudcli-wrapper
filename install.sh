@@ -198,7 +198,20 @@ fi
 
 if [ "$NEED_INSTALL" = "1" ] && [ ! -L "$RUNTIME_DIR" ]; then
   info "production 의존성 설치 중... (시간이 걸릴 수 있습니다)"
-  ( cd "$RUNTIME_DIR" && npm install --omit=dev )
+
+  # `--ignore-scripts` so a stray dev-only `prepare` hook (husky etc.)
+  # cannot break the install. We then run the project's required
+  # `postinstall` (node-pty permission fix) explicitly. release.sh also
+  # strips `prepare` from the staging package.json, but enforcing it on
+  # the install side too keeps us robust against older tarballs and
+  # CDN-cached release assets.
+  ( cd "$RUNTIME_DIR" && npm install --omit=dev --ignore-scripts )
+
+  if [ -f "$RUNTIME_DIR/scripts/fix-node-pty.js" ]; then
+    info "postinstall 실행 (node-pty 권한 fix)..."
+    ( cd "$RUNTIME_DIR" && node scripts/fix-node-pty.js ) || warn "fix-node-pty.js 실행 실패 (PTY 사용 시 권한 문제 발생 가능)"
+  fi
+
   ok "의존성 설치 완료"
 elif [ ! -L "$RUNTIME_DIR" ]; then
   ok "node_modules 캐시 재사용 (재설치하려면 VIENNA_REINSTALL_DEPS=1)"
