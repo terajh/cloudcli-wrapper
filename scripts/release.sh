@@ -151,6 +151,24 @@ cat > "$STAGING_RUNTIME/.vienna-runtime.json" <<EOF
 }
 EOF
 
+# Strip dev-only npm lifecycle hooks (husky, lint-staged, etc.) from
+# the staging package.json so the runtime install can run with
+# `npm install --omit=dev` without choking on missing dev binaries.
+# The original package.json is preserved in the source tree.
+info "staging package.json 에서 dev-only 라이프사이클 훅 제거..."
+node -e "
+  const fs = require('fs');
+  const path = '$STAGING_RUNTIME/package.json';
+  const pkg = JSON.parse(fs.readFileSync(path, 'utf8'));
+  pkg.scripts = pkg.scripts || {};
+  for (const key of ['prepare', 'precommit', 'commitmsg']) {
+    if (pkg.scripts[key]) {
+      delete pkg.scripts[key];
+    }
+  }
+  fs.writeFileSync(path, JSON.stringify(pkg, null, 2) + '\n');
+"
+
 tar -czf "$OUTPUT_DIR/$TARBALL_NAME" -C "$STAGING_DIR" claudecodeui
 ok "runtime tarball: $OUTPUT_DIR/$TARBALL_NAME ($(du -h "$OUTPUT_DIR/$TARBALL_NAME" | cut -f1))"
 
