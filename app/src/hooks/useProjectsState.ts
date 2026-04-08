@@ -214,6 +214,19 @@ export function useProjectsState({
   const optimisticCleanupTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   /**
+   * Sessions that the user just optimistically deleted from the sidebar.
+   * The backend file-system watcher can broadcast a stale `projects_updated`
+   * payload (still containing the row we just removed) before the real
+   * delete propagates, which causes the row to flicker back into view for
+   * a moment and then disappear again. While an id is in this map we strip
+   * it from any incoming projects payload, so the row stays gone from the
+   * moment of the click. The mapped value is the cleanup timer handle so
+   * we can cancel cleanup early if the real payload already dropped the id.
+   */
+  const recentlyDeletedSessionsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const RECENTLY_DELETED_TTL_MS = 8000;
+
+  /**
    * Insert a temporary session row into the sidebar immediately, so the user
    * sees their new chat without waiting for the backend JSONL refresh.
    * The real `projects_updated` payload eventually replaces this with the
@@ -397,10 +410,62 @@ export function useProjectsState({
       (activeSessions.size > 0 && Array.from(activeSessions).some((id) => id.startsWith('new-session-')));
 
     const rawUpdatedProjects = projectsMessage.projects;
+
+    // Strip any session id the user just optimistically deleted. Without
+    // this the row would flicker back into view if the backend broadcasts
+    // a stale projects payload before its delete actually propagates.
+    const recentlyDeletedIds = recentlyDeletedSessionsRef.current;
+    const projectsAfterDeleteStrip = recentlyDeletedIds.size === 0
+      ? rawUpdatedProjects
+      : rawUpdatedProjects.map((project) => {
+          const stripList = (list: ProjectSession[] | undefined) =>
+            list?.filter((session) => !recentlyDeletedIds.has(session.id));
+          const before = (project.sessions?.length ?? 0)
+            + (project.cursorSessions?.length ?? 0)
+            + (project.codexSessions?.length ?? 0)
+            + (project.geminiSessions?.length ?? 0);
+          const next = {
+            ...project,
+            sessions: stripList(project.sessions) ?? project.sessions,
+            cursorSessions: stripList(project.cursorSessions) ?? project.cursorSessions,
+            codexSessions: stripList(project.codexSessions) ?? project.codexSessions,
+            geminiSessions: stripList(project.geminiSessions) ?? project.geminiSessions,
+          };
+          const after = (next.sessions?.length ?? 0)
+            + (next.cursorSessions?.length ?? 0)
+            + (next.codexSessions?.length ?? 0)
+            + (next.geminiSessions?.length ?? 0);
+          if (before !== after && next.sessionMeta) {
+            next.sessionMeta = {
+              ...next.sessionMeta,
+              total: Math.max(0, ((next.sessionMeta.total as number | undefined) ?? before) - (before - after)),
+            };
+          }
+          return next;
+        });
+
+    // If the server payload itself no longer contains a recently-deleted id,
+    // the delete has propagated and we can let the cleanup happen naturally
+    // (clear the explicit timer here so the entry vanishes immediately).
+    if (recentlyDeletedIds.size > 0) {
+      const serverIds = new Set<string>();
+      for (const project of rawUpdatedProjects) {
+        for (const session of getProjectSessions(project)) {
+          serverIds.add(session.id);
+        }
+      }
+      for (const [sessionId, timer] of recentlyDeletedIds) {
+        if (!serverIds.has(sessionId)) {
+          clearTimeout(timer);
+          recentlyDeletedIds.delete(sessionId);
+        }
+      }
+    }
+
     // Strip the `__optimistic` marker for any ids the server now knows about,
     // and cancel any pending fallback timers so we don't delete the real row
     // from under ourselves.
-    const updatedProjects = reconcileOptimisticSessions(projects, rawUpdatedProjects);
+    const updatedProjects = reconcileOptimisticSessions(projects, projectsAfterDeleteStrip);
 
     if (optimisticCleanupTimersRef.current.size > 0) {
       const knownServerIds = new Set<string>();
@@ -593,15 +658,36 @@ export function useProjectsState({
 
   const handleSessionDelete = useCallback(
     (sessionIdToDelete: string) => {
+      // Mark id as recently-deleted so any stale `projects_updated` payload
+      // arriving in the next few seconds (which can still contain the row)
+      // gets stripped instead of flickering the row back onto the sidebar.
+      const existingTimer = recentlyDeletedSessionsRef.current.get(sessionIdToDelete);
+      if (existingTimer) clearTimeout(existingTimer);
+      const cleanupTimer = setTimeout(() => {
+        recentlyDeletedSessionsRef.current.delete(sessionIdToDelete);
+      }, RECENTLY_DELETED_TTL_MS);
+      recentlyDeletedSessionsRef.current.set(sessionIdToDelete, cleanupTimer);
+
       if (selectedSession?.id === sessionIdToDelete) {
         setSelectedSession(null);
         navigate('/');
       }
 
+      // Optimistically drop the session from EVERY provider list, not just
+      // `sessions`. The backend exposes claude rows under `sessions`, cursor
+      // under `cursorSessions`, codex under `codexSessions`, gemini under
+      // `geminiSessions`, and historically a missed list was the source of
+      // earlier flicker bugs.
+      const stripFromList = (list: ProjectSession[] | undefined) =>
+        list?.filter((session) => session.id !== sessionIdToDelete);
+
       setProjects((prevProjects) =>
         prevProjects.map((project) => ({
           ...project,
-          sessions: project.sessions?.filter((session) => session.id !== sessionIdToDelete) ?? [],
+          sessions: stripFromList(project.sessions) ?? [],
+          cursorSessions: stripFromList(project.cursorSessions) ?? project.cursorSessions,
+          codexSessions: stripFromList(project.codexSessions) ?? project.codexSessions,
+          geminiSessions: stripFromList(project.geminiSessions) ?? project.geminiSessions,
           sessionMeta: {
             ...project.sessionMeta,
             total: Math.max(0, (project.sessionMeta?.total as number | undefined ?? 0) - 1),
