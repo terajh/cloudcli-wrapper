@@ -136,6 +136,28 @@ export default function AppContent() {
 
   return (
     <div className="fixed inset-0 flex bg-background">
+      {/*
+        Vienna(Tauri) — macOS title bar drag region.
+        - tauri.conf.json 의 windows[0].titleBarStyle = "Overlay" + hiddenTitle
+          상태에서는 OS 가 신호등 버튼만 그리고 나머지 상단 영역은 webview 가
+          그대로 차지한다. webview 영역은 기본적으로 non-draggable 이므로
+          명시적인 drag region 을 박아 두지 않으면 사용자가 상단을 잡고 창을
+          옮기지 못한다.
+        - data-tauri-drag-region 속성을 가진 div 는 mousedown -> 윈도우 이동,
+          더블클릭 -> macOS '윈도우 더블클릭 동작' 설정(기본: zoom)을 그대로
+          위임받는다. 그래서 본 div 하나로 "최상단 영역 드래그" + "더블클릭 zoom"
+          이 동시에 처리된다.
+        - 신호등 버튼 영역(좌측 ~78px)은 padding 으로 비워 OS 에 클릭 이벤트가
+          가도록 한다. 높이 28px 는 macOS 기본 title bar 와 동일.
+        - 데스크톱(웹 브라우저)에서 동작했을 때는 단순한 투명 띠라서 어떤 것도
+          가리지 않는다.
+      */}
+      <div
+        data-tauri-drag-region
+        className="fixed inset-x-0 top-0 z-[1000] h-7 select-none"
+        style={{ paddingLeft: 78 }}
+        aria-hidden="true"
+      />
       {!isMobile ? (
         <div className="h-full flex-shrink-0 border-r border-border/50">
           <Sidebar {...sidebarSharedProps} />

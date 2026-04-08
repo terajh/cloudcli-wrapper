@@ -1,9 +1,15 @@
-import { Plus } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronDown, ChevronUp, Plus } from 'lucide-react';
 import type { TFunction } from 'i18next';
 import type { Project, ProjectSession, SessionProvider } from '../../../../types/app';
 import type { SessionWithProvider } from '../../types/types';
 import { cn } from '../../../../lib/utils';
 import SidebarSessionItem from './SidebarSessionItem';
+
+// 데스크톱 사이드바에서 한 프로젝트당 기본으로 노출할 세션 수.
+// 이 수를 넘어가면 "더보기" 토글이 나타나고, 펼치면 전체가 한 번에 보이며
+// 스크롤 없이 그대로 흘러내린다.
+const DESKTOP_DEFAULT_VISIBLE_SESSIONS = 10;
 
 type SidebarProjectSessionsProps = {
   project: Project;
@@ -73,9 +79,14 @@ export default function SidebarProjectSessions({
 }: SidebarProjectSessionsProps) {
   const hasSessions = sessions.length > 0;
 
-  // 데스크톱에서 최대 10개까지 보이고 나머지는 박스 내부 스크롤
-  // 세션 아이템 1개 높이 ≈ 36px → 10개 = 360px
-  const SESSIONS_MAX_HEIGHT_PX = 360;
+  // 데스크톱: 기본 10개 노출 → 10개 초과 시 "더보기" 토글로 전체 펼침.
+  // 펼친 상태에서도 스크롤 없이 그대로 길게 늘어난다.
+  const [showAllSessions, setShowAllSessions] = useState(false);
+  const hasOverflow = sessions.length > DESKTOP_DEFAULT_VISIBLE_SESSIONS;
+  const visibleDesktopSessions = hasOverflow && !showAllSessions
+    ? sessions.slice(0, DESKTOP_DEFAULT_VISIBLE_SESSIONS)
+    : sessions;
+  const hiddenSessionCount = sessions.length - DESKTOP_DEFAULT_VISIBLE_SESSIONS;
 
   // CSS grid-template-rows 0fr → 1fr 트릭으로 부드러운 펼침/접힘.
   // 자식은 항상 마운트 상태로 두고 outer wrapper 의 행 높이만 transition.
@@ -110,30 +121,54 @@ export default function SidebarProjectSessions({
               <p className="text-xs text-muted-foreground/70">{t('sessions.noSessions')}</p>
             </div>
           ) : (
-            <div
-              className="space-y-0.5 md:overflow-y-auto md:overscroll-contain"
-              style={{ maxHeight: `${SESSIONS_MAX_HEIGHT_PX}px` }}
-            >
-              {sessions.map((session) => (
-                <SidebarSessionItem
-                  key={session.id}
-                  project={project}
-                  session={session}
-                  selectedSession={selectedSession}
-                  currentTime={currentTime}
-                  editingSession={editingSession}
-                  editingSessionName={editingSessionName}
-                  onEditingSessionNameChange={onEditingSessionNameChange}
-                  onStartEditingSession={onStartEditingSession}
-                  onCancelEditingSession={onCancelEditingSession}
-                  onSaveEditingSession={onSaveEditingSession}
-                  onProjectSelect={onProjectSelect}
-                  onSessionSelect={onSessionSelect}
-                  onDeleteSession={onDeleteSession}
-                  t={t}
-                />
-              ))}
-            </div>
+            <>
+              <div className="space-y-0.5">
+                {visibleDesktopSessions.map((session) => (
+                  <SidebarSessionItem
+                    key={session.id}
+                    project={project}
+                    session={session}
+                    selectedSession={selectedSession}
+                    currentTime={currentTime}
+                    editingSession={editingSession}
+                    editingSessionName={editingSessionName}
+                    onEditingSessionNameChange={onEditingSessionNameChange}
+                    onStartEditingSession={onStartEditingSession}
+                    onCancelEditingSession={onCancelEditingSession}
+                    onSaveEditingSession={onSaveEditingSession}
+                    onProjectSelect={onProjectSelect}
+                    onSessionSelect={onSessionSelect}
+                    onDeleteSession={onDeleteSession}
+                    t={t}
+                  />
+                ))}
+              </div>
+
+              {hasOverflow && (
+                <button
+                  type="button"
+                  className="hidden md:flex mt-0.5 w-full items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground/70 transition-colors hover:bg-accent/30 hover:text-foreground/80"
+                  onClick={() => setShowAllSessions((prev) => !prev)}
+                >
+                  {showAllSessions ? (
+                    <>
+                      <ChevronUp className="h-3 w-3" />
+                      <span>{t('sessions.collapse', { defaultValue: '접기' })}</span>
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="h-3 w-3" />
+                      <span>
+                        {t('sessions.showMore', {
+                          defaultValue: `더보기 (${hiddenSessionCount}개)`,
+                          count: hiddenSessionCount,
+                        })}
+                      </span>
+                    </>
+                  )}
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
