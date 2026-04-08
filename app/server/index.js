@@ -39,7 +39,7 @@ import os from 'os';
 import http from 'http';
 import cors from 'cors';
 import { promises as fsPromises } from 'fs';
-import { spawn } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 import pty from 'node-pty';
 import fetch from 'node-fetch';
 import mime from 'mime-types';
@@ -1803,6 +1803,59 @@ function handleShellConnection(ws) {
                     }
 
                     console.log('🔧 Executing shell command:', shellCommand);
+
+                    // Pre-flight: detect missing CLI binaries (cursor-agent / codex / gemini / claude)
+                    // before handing off to the PTY shell. Without this the PTY just shows
+                    // "command not found" buried in shell output and the login modal looks broken.
+                    const cliBinaryToCheck = (() => {
+                        if (provider === 'cursor' || (initialCommand || '').startsWith('cursor-agent')) return 'cursor-agent';
+                        if (provider === 'codex' || (initialCommand || '').startsWith('codex')) return 'codex';
+                        if (provider === 'gemini' || (initialCommand || '').startsWith('gemini')) return 'gemini';
+                        if (provider === 'claude' || (initialCommand || '').startsWith('claude')) return 'claude';
+                        return null;
+                    })();
+
+                    if (cliBinaryToCheck) {
+                        // `command -v` honors the inherited PATH (which Vienna's Rust shell
+                        // already merges with login + interactive PATH). spawnSync is sync but
+                        // very fast — sub-millisecond.
+                        const probe = spawnSync(os.platform() === 'win32' ? 'where' : 'command', os.platform() === 'win32' ? [cliBinaryToCheck] : ['-v', cliBinaryToCheck], {
+                            shell: os.platform() !== 'win32',
+                            env: process.env,
+                        });
+
+                        if (probe.status !== 0) {
+                            console.warn(`⚠️  CLI binary not found in PATH: ${cliBinaryToCheck}`);
+                            const installHint = (() => {
+                                if (cliBinaryToCheck === 'cursor-agent') {
+                                    return [
+                                        '\x1b[33m\r\nCursor CLI(cursor-agent)을 PATH에서 찾을 수 없습니다.\x1b[0m\r\n\r\n',
+                                        '설치 방법:\r\n',
+                                        '  \x1b[36mcurl https://cursor.com/install -fsS | bash\x1b[0m\r\n',
+                                        '  또는 https://docs.cursor.com/cli/installation 참고\r\n\r\n',
+                                        '설치 후 새 터미널에서 \x1b[36mcursor-agent --version\x1b[0m 으로 확인하고 다시 시도하세요.\r\n',
+                                    ].join('');
+                                }
+                                if (cliBinaryToCheck === 'codex') {
+                                    return '\x1b[33m\r\nCodex CLI(codex)을 PATH에서 찾을 수 없습니다.\x1b[0m\r\n\r\n설치: \x1b[36mnpm install -g @openai/codex-cli\x1b[0m\r\n';
+                                }
+                                if (cliBinaryToCheck === 'gemini') {
+                                    return '\x1b[33m\r\nGemini CLI(gemini)을 PATH에서 찾을 수 없습니다.\x1b[0m\r\n\r\n설치: \x1b[36mnpm install -g @google/gemini-cli\x1b[0m\r\n';
+                                }
+                                return '\x1b[33m\r\nClaude CLI(claude)을 PATH에서 찾을 수 없습니다.\x1b[0m\r\n\r\n설치: https://docs.anthropic.com/en/docs/claude-code\r\n';
+                            })();
+
+                            ws.send(JSON.stringify({
+                                type: 'output',
+                                data: installHint,
+                            }));
+                            ws.send(JSON.stringify({
+                                type: 'shell-exit',
+                                exitCode: 127,
+                            }));
+                            return;
+                        }
+                    }
 
                     // Use appropriate shell based on platform
                     const shell = os.platform() === 'win32' ? 'powershell.exe' : 'bash';

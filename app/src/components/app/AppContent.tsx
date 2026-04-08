@@ -135,7 +135,16 @@ export default function AppContent() {
   }, [isConnected, selectedSession?.id, sendMessage]);
 
   return (
-    <div className="fixed inset-0 flex bg-background">
+    <div
+      // Lift the chat surface slightly off pure `bg-background` so the dark
+      // theme reads as a layered panel instead of one solid black slab.
+      // Same color-mix trick the sidebar uses, but with a smaller offset so
+      // the sidebar still reads as the *more* elevated panel of the two.
+      className="fixed inset-0 flex"
+      style={{
+        backgroundColor: 'color-mix(in srgb, var(--background) 94%, var(--foreground) 6%)',
+      }}
+    >
       {/*
         Vienna(Tauri) — macOS title bar drag region.
         - tauri.conf.json 의 windows[0].titleBarStyle = "Overlay" + hiddenTitle
