@@ -285,11 +285,12 @@ export default function SidebarProjectItem({
         <Button
           variant="ghost"
           className={cn(
-            'hidden md:flex flex-1 min-w-0 justify-between p-2 h-auto font-normal hover:bg-accent/50',
-            isSelected && 'bg-white/10 text-foreground hover:bg-white/15',
+            'hidden md:flex flex-1 min-w-0 justify-between px-2 py-1.5 h-auto font-normal rounded-md',
+            'hover:bg-accent/40 transition-colors duration-150',
+            isSelected && 'bg-white/[0.06] text-foreground hover:bg-white/[0.09]',
             isStarred &&
               !isSelected &&
-              'bg-yellow-50/50 dark:bg-yellow-900/10 hover:bg-yellow-100/50 dark:hover:bg-yellow-900/20',
+              'bg-yellow-50/40 dark:bg-yellow-900/[0.06] hover:bg-yellow-100/40 dark:hover:bg-yellow-900/[0.10]',
           )}
           onClick={selectAndToggleProject}
           onContextMenu={(event) => {
@@ -297,18 +298,18 @@ export default function SidebarProjectItem({
             setContextMenu({ x: event.clientX, y: event.clientY });
           }}
         >
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            <div className="flex h-4 w-4 flex-shrink-0 items-center justify-center text-muted-foreground">
+          <div className="flex min-w-0 flex-1 items-center gap-1.5">
+            <div className="flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center text-muted-foreground/70">
               {isExpanded ? (
-                <ChevronDown className="h-3.5 w-3.5" />
+                <ChevronDown className="h-3 w-3" />
               ) : (
-                <ChevronRight className="h-3.5 w-3.5" />
+                <ChevronRight className="h-3 w-3" />
               )}
             </div>
             {isExpanded ? (
-              <FolderOpen className="h-4 w-4 flex-shrink-0 text-primary" />
+              <FolderOpen className="h-3.5 w-3.5 flex-shrink-0 text-primary/85" />
             ) : (
-              <Folder className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+              <Folder className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground/80" />
             )}
             {isEditing ? (
               <div className="min-w-0 flex-1 text-left">
@@ -337,7 +338,10 @@ export default function SidebarProjectItem({
             ) : (
               <>
                 <span
-                  className="min-w-0 flex-shrink truncate text-left text-sm font-semibold text-foreground"
+                  className={cn(
+                    'min-w-0 flex-shrink truncate text-left text-[13px] leading-tight',
+                    isSelected ? 'font-semibold text-foreground' : 'font-medium text-foreground/90',
+                  )}
                   title={project.displayName}
                 >
                   {project.displayName}
@@ -349,14 +353,14 @@ export default function SidebarProjectItem({
                   if (!folderName || folderName === project.displayName) return null;
                   return (
                     <span
-                      className="min-w-0 flex-shrink truncate text-[11px] text-muted-foreground"
+                      className="min-w-0 flex-shrink truncate text-[10.5px] text-muted-foreground/65"
                       title={project.fullPath}
                     >
                       {folderName}
                     </span>
                   );
                 })()}
-                <span className="flex-shrink-0 text-[10px] text-muted-foreground">
+                <span className="ml-auto flex-shrink-0 text-[10px] tabular-nums text-muted-foreground/60">
                   {sessionCountDisplay}
                 </span>
               </>

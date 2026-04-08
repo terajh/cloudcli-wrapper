@@ -420,7 +420,7 @@ export function useSidebarController({
     [],
   );
 
-  const confirmDeleteSession = useCallback(async () => {
+  const confirmDeleteSession = useCallback(() => {
     if (!sessionDeleteConfirmation) {
       return;
     }
@@ -428,31 +428,71 @@ export function useSidebarController({
     const { projectName, sessionId, provider } = sessionDeleteConfirmation;
     setSessionDeleteConfirmation(null);
 
-    try {
-      let response;
-      if (provider === 'codex') {
-        response = await api.deleteCodexSession(sessionId);
-      } else if (provider === 'gemini') {
-        response = await api.deleteGeminiSession(sessionId);
-      } else {
-        response = await api.deleteSession(projectName, sessionId);
-      }
+    // Optimistic delete: drop the row from the UI right away so the click
+    // feels instant. The network request goes out fire-and-forget; the
+    // existing handleSessionDelete in useProjectsState already updates the
+    // local projects state, so there is no flicker from a re-fetch.
+    onSessionDelete?.(sessionId);
 
-      if (response.ok) {
-        onSessionDelete?.(sessionId);
-      } else {
-        const errorText = await response.text();
-        console.error('[Sidebar] Failed to delete session:', {
-          status: response.status,
-          error: errorText,
-        });
-        alert(t('messages.deleteSessionFailed'));
-      }
-    } catch (error) {
-      console.error('[Sidebar] Error deleting session:', error);
-      alert(t('messages.deleteSessionError'));
-    }
+    const deletePromise = (() => {
+      if (provider === 'codex') return api.deleteCodexSession(sessionId);
+      if (provider === 'gemini') return api.deleteGeminiSession(sessionId);
+      return api.deleteSession(projectName, sessionId);
+    })();
+
+    deletePromise
+      .then(async (response) => {
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => '');
+          console.error('[Sidebar] Failed to delete session:', {
+            status: response.status,
+            error: errorText,
+          });
+          // Surface the failure but do NOT auto-restore the row — the user
+          // already saw it disappear. A subsequent project refetch will
+          // resync if the backend kept it.
+          alert(t('messages.deleteSessionFailed'));
+        }
+      })
+      .catch((error) => {
+        console.error('[Sidebar] Error deleting session:', error);
+        alert(t('messages.deleteSessionError'));
+      });
   }, [onSessionDelete, sessionDeleteConfirmation, t]);
+
+  // One-click delete (no confirmation modal). Used by the sidebar trash
+  // button so a hover-revealed click vanishes the row immediately.
+  const deleteSessionImmediate = useCallback(
+    (
+      projectName: string,
+      sessionId: string,
+      _sessionTitle: string,
+      provider: SessionDeleteConfirmation['provider'] = 'claude',
+    ) => {
+      onSessionDelete?.(sessionId);
+
+      const deletePromise = (() => {
+        if (provider === 'codex') return api.deleteCodexSession(sessionId);
+        if (provider === 'gemini') return api.deleteGeminiSession(sessionId);
+        return api.deleteSession(projectName, sessionId);
+      })();
+
+      deletePromise
+        .then(async (response) => {
+          if (!response.ok) {
+            const errorText = await response.text().catch(() => '');
+            console.error('[Sidebar] Failed to delete session (immediate):', {
+              status: response.status,
+              error: errorText,
+            });
+          }
+        })
+        .catch((error) => {
+          console.error('[Sidebar] Error deleting session (immediate):', error);
+        });
+    },
+    [onSessionDelete],
+  );
 
   const requestProjectDelete = useCallback(
     (project: Project) => {
@@ -623,6 +663,7 @@ export function useSidebarController({
     saveProjectName,
     showDeleteSessionConfirmation,
     confirmDeleteSession,
+    deleteSessionImmediate,
     requestProjectDelete,
     confirmDeleteProject,
     loadMoreSessions,

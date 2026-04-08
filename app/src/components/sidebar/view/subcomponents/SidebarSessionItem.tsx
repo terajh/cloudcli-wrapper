@@ -131,8 +131,9 @@ export default function SidebarSessionItem({
         <Button
           variant="ghost"
           className={cn(
-            'w-full justify-start p-2 h-auto font-normal text-left hover:bg-accent/50 transition-colors duration-200',
-            isSelected && 'bg-white/10 text-foreground hover:bg-white/15',
+            'w-full justify-start px-2 py-1.5 h-auto font-normal text-left rounded-md',
+            'hover:bg-accent/40 transition-colors duration-150',
+            isSelected && 'bg-white/[0.06] text-foreground hover:bg-white/[0.09]',
           )}
           onClick={() => onSessionSelect(session, project.name)}
           onContextMenu={(event) => {
@@ -140,12 +141,22 @@ export default function SidebarSessionItem({
             setContextMenu({ x: event.clientX, y: event.clientY });
           }}
         >
-          <div className="flex w-full min-w-0 items-center gap-2 pr-8">
-            <SessionProviderLogo provider={session.__provider} className="h-3 w-3 flex-shrink-0" />
-            <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">
+          <div className="flex w-full min-w-0 items-center gap-2 pr-7">
+            <span
+              className={cn(
+                'h-1 w-1 flex-shrink-0 rounded-full',
+                sessionView.isActive ? 'bg-emerald-400' : isSelected ? 'bg-foreground/40' : 'bg-transparent',
+              )}
+            />
+            <span
+              className={cn(
+                'min-w-0 flex-1 truncate text-[13px] leading-tight',
+                isSelected ? 'font-medium text-foreground' : 'text-foreground/85',
+              )}
+            >
               {sessionView.sessionName}
             </span>
-            <span className="flex-shrink-0 text-[10px] text-muted-foreground transition-opacity group-hover:opacity-0">
+            <span className="flex-shrink-0 text-[10px] text-muted-foreground/80 transition-opacity duration-150 group-hover:opacity-0">
               {formatTimeAgo(sessionView.sessionTime, currentTime, t)}
             </span>
           </div>

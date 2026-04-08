@@ -88,8 +88,8 @@ function Sidebar({
     startEditing,
     cancelEditing,
     saveProjectName,
-    showDeleteSessionConfirmation,
     confirmDeleteSession,
+    deleteSessionImmediate,
     requestProjectDelete,
     confirmDeleteProject,
     loadMoreSessions,
@@ -172,7 +172,10 @@ function Sidebar({
     },
     onDeleteProject: requestProjectDelete,
     onSessionSelect: handleSessionClick,
-    onDeleteSession: showDeleteSessionConfirmation,
+    // One-click immediate delete (optimistic) — bypasses the confirmation
+    // modal so the trash button vanishes the row instantly. The modal
+    // confirmation hook is still exported for power-flows that need it.
+    onDeleteSession: deleteSessionImmediate,
     onLoadMoreSessions: (project) => {
       void loadMoreSessions(project);
     },
