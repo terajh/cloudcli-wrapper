@@ -22,22 +22,19 @@ Vienna runs the entire claudecodeui frontend + Express server inside a Tauri (Ru
 
 Apple Silicon macOS, Node.js 18+ required.
 
-### Option A — double-click installer (recommended for non-terminal users)
-
-1. Download [`Vienna-installer-0.6.2.command.zip`](https://github.com/terajh/vienna/releases/download/v0.6.2/Vienna-installer-0.6.2.command.zip) from the latest release.
-2. Double-click the zip in Finder → it extracts `Vienna-installer.command`.
-3. Double-click `Vienna-installer.command`. Terminal opens and the installer runs automatically.
-4. **First-time Gatekeeper warning** ("could not be opened because it is from an unidentified developer") is expected on unsigned binaries. Two ways to bypass:
-   - Right-click the `.command` file → **Open** → confirm the second dialog.
-   - Or: System Settings → **Privacy & Security** → scroll to the bottom → **Open Anyway**.
-
-The zip is packaged with `ditto -c -k --sequesterRsrc`, so the executable bit survives Safari's download-quarantine and the `.command` file is double-click runnable straight out of the box.
-
-### Option B — one-liner (terminal users)
+**Open Terminal** (Spotlight ⌘+Space → type "Terminal" → Enter) and paste:
 
 ```bash
 curl -fsSL https://github.com/terajh/vienna/releases/download/v0.6.2/install.sh | bash
 ```
+
+That's it. The script will download the DMG, install the app into `/Applications`, and set up the runtime. After it finishes:
+
+```bash
+open /Applications/Vienna.app
+```
+
+or just search "Vienna" in Spotlight.
 
 ### What the installer does
 
@@ -47,7 +44,13 @@ curl -fsSL https://github.com/terajh/vienna/releases/download/v0.6.2/install.sh 
 4. Runs `npm install --omit=dev --ignore-scripts` (skips dev-only `husky` etc.) and then explicitly runs `scripts/fix-node-pty.js` so PTY sessions work.
 5. Backs up the previous install (with `auth.db`) before swapping in the new runtime.
 
-After install, just open Vienna from Spotlight or `open /Applications/Vienna.app`.
+If you prefer to run it step-by-step instead of piping to bash, download [`install.sh`](https://github.com/terajh/vienna/releases/download/v0.6.2/install.sh) directly and then:
+
+```bash
+bash ~/Downloads/install.sh
+```
+
+(Browser-downloaded `.sh` files lose their +x bit on macOS, so `bash <file>` is the way to run them without `chmod +x` first.)
 
 ## Features
 
