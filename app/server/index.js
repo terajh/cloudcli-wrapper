@@ -1817,12 +1817,24 @@ function handleShellConnection(ws) {
 
                     if (cliBinaryToCheck) {
                         // `command -v` honors the inherited PATH (which Vienna's Rust shell
-                        // already merges with login + interactive PATH). spawnSync is sync but
-                        // very fast — sub-millisecond.
-                        const probe = spawnSync(os.platform() === 'win32' ? 'where' : 'command', os.platform() === 'win32' ? [cliBinaryToCheck] : ['-v', cliBinaryToCheck], {
-                            shell: os.platform() !== 'win32',
+                        // already merges with login + interactive PATH). spawnSync is sync
+                        // but very fast — sub-millisecond.
+                        //
+                        // Important: when `shell: true`, the entire command must be passed
+                        // as the first arg as a single string, otherwise extra args become
+                        // positional shell args and status comes back 0 even when the
+                        // binary is missing. Pass the full pipeline string + send stderr
+                        // to /dev/null so a missing binary stays silent.
+                        const probeCmd = os.platform() === 'win32'
+                            ? `where ${cliBinaryToCheck}`
+                            : `command -v ${cliBinaryToCheck} >/dev/null 2>&1`;
+                        const probe = spawnSync(probeCmd, {
+                            shell: true,
                             env: process.env,
+                            stdio: 'ignore',
                         });
+
+                        console.log(`🔍 CLI pre-flight: ${cliBinaryToCheck} -> status=${probe.status} (provider=${provider}, isPlainShell=${isPlainShell})`);
 
                         if (probe.status !== 0) {
                             console.warn(`⚠️  CLI binary not found in PATH: ${cliBinaryToCheck}`);
