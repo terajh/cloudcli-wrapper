@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Check, Clock, Trash2, X } from 'lucide-react';
 import type { TFunction } from 'i18next';
 import { Badge, Button } from '../../../../shared/view/ui';
@@ -52,7 +52,17 @@ export default function SidebarSessionItem({
   const isSelected = selectedSession?.id === session.id;
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
+  // 삭제 애니메이션:
+  // trash 를 누르면 곧바로 onDeleteSession 을 호출하지 않고, isExiting 을 켜서
+  // 행이 먼저 grid-rows 0fr + opacity 0 로 부드럽게 줄어들도록 한 다음
+  // EXIT_DURATION_MS 후에야 store 에서 실제로 제거한다.
+  // 결과: 한 박자 깜빡 → 사라짐 (이전) ➜ 부드럽게 줄어들면서 사라짐.
+  const EXIT_DURATION_MS = 180;
+  const [isExiting, setIsExiting] = useState(false);
+  const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const selectMobileSession = () => {
+    if (isExiting) return;
     onProjectSelect(project);
     onSessionSelect(session, project.name);
   };
@@ -62,17 +72,33 @@ export default function SidebarSessionItem({
   };
 
   const requestDeleteSession = () => {
-    onDeleteSession(project.name, session.id, sessionView.sessionName, session.__provider);
+    if (isExiting) return;
+    setIsExiting(true);
+    if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
+    exitTimerRef.current = setTimeout(() => {
+      onDeleteSession(project.name, session.id, sessionView.sessionName, session.__provider);
+    }, EXIT_DURATION_MS);
   };
 
   return (
-    <div className="group relative">
-      {sessionView.isActive && (
-        <div className="absolute left-0 top-1/2 -translate-x-1 -translate-y-1/2 transform">
+    <div
+      className={cn(
+        'group relative grid transition-[grid-template-rows,opacity] ease-out motion-reduce:transition-none',
+        isExiting
+          ? 'grid-rows-[0fr] opacity-0 pointer-events-none'
+          : 'grid-rows-[1fr] opacity-100',
+      )}
+      style={{ transitionDuration: `${EXIT_DURATION_MS}ms` }}
+    >
+      {/* Active session dot lives outside the overflow-hidden clipper so its
+          slight negative-x translate isn't visually clipped. */}
+      {sessionView.isActive && !isExiting && (
+        <div className="pointer-events-none absolute left-0 top-1/2 z-10 -translate-x-1 -translate-y-1/2 transform">
           <div className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
         </div>
       )}
 
+      <div className="overflow-hidden">
       <div className="md:hidden">
         <div
           className={cn(
@@ -247,6 +273,7 @@ export default function SidebarSessionItem({
             ]}
           />
         )}
+      </div>
       </div>
     </div>
   );
