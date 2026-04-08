@@ -178,6 +178,34 @@ ok "runtime tarball: $OUTPUT_DIR/$TARBALL_NAME ($(du -h "$OUTPUT_DIR/$TARBALL_NA
 cp "$VIENNA_DIR/install.sh" "$OUTPUT_DIR/install.sh"
 ok "install.sh 복사"
 
+# ─────────────────────────────────────────────
+# 5. Double-click launcher (installer.command) 패키징
+# ─────────────────────────────────────────────
+# macOS Safari/Finder 가 다운로드한 파일은 실행권한이 제거되므로 그냥
+# .command 파일 단독 배포는 "permission denied" 가 난다.
+# `ditto -c -k --sequesterRsrc` 는 macOS 네이티브 zip 포맷으로 패키징
+# 하면서 unix 실행권한과 확장속성을 그대로 보존하므로, 사용자가 zip 을
+# 더블클릭으로 풀면 그 안의 .command 는 여전히 +x 상태가 된다.
+COMMAND_SOURCE="$VIENNA_DIR/scripts/installer.command"
+if [ -f "$COMMAND_SOURCE" ]; then
+  # 버전을 installer.command 안의 VIENNA_VERSION 기본값에 주입해서
+  # zip 안에 박아둔다. 본 파일 자체는 건드리지 않고 staging 복사본만 수정.
+  COMMAND_STAGING="$STAGING_DIR/Vienna-installer.command"
+  mkdir -p "$STAGING_DIR"
+  sed "s|VIENNA_VERSION:-v[0-9.]*|VIENNA_VERSION:-v${VERSION}|" "$COMMAND_SOURCE" > "$COMMAND_STAGING"
+  chmod +x "$COMMAND_STAGING"
+
+  COMMAND_ZIP_NAME="Vienna-installer-${VERSION}.command.zip"
+  COMMAND_ZIP_PATH="$OUTPUT_DIR/$COMMAND_ZIP_NAME"
+  rm -f "$COMMAND_ZIP_PATH"
+
+  ( cd "$STAGING_DIR" && ditto -c -k --sequesterRsrc "Vienna-installer.command" "$COMMAND_ZIP_PATH" )
+
+  ok "double-click 런처 zip: $COMMAND_ZIP_PATH ($(du -h "$COMMAND_ZIP_PATH" | cut -f1))"
+else
+  warn "scripts/installer.command 가 없어 double-click 런처 zip 패키징을 건너뜁니다."
+fi
+
 rm -rf "$STAGING_DIR"
 
 echo ""

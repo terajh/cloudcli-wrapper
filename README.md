@@ -20,13 +20,26 @@ Vienna runs the entire claudecodeui frontend + Express server inside a Tauri (Ru
 
 ## Install
 
-Apple Silicon macOS, Node.js 18+ required:
+Apple Silicon macOS, Node.js 18+ required.
+
+### Option A — double-click installer (recommended for non-terminal users)
+
+1. Download [`Vienna-installer-0.6.2.command.zip`](https://github.com/terajh/vienna/releases/download/v0.6.2/Vienna-installer-0.6.2.command.zip) from the latest release.
+2. Double-click the zip in Finder → it extracts `Vienna-installer.command`.
+3. Double-click `Vienna-installer.command`. Terminal opens and the installer runs automatically.
+4. **First-time Gatekeeper warning** ("could not be opened because it is from an unidentified developer") is expected on unsigned binaries. Two ways to bypass:
+   - Right-click the `.command` file → **Open** → confirm the second dialog.
+   - Or: System Settings → **Privacy & Security** → scroll to the bottom → **Open Anyway**.
+
+The zip is packaged with `ditto -c -k --sequesterRsrc`, so the executable bit survives Safari's download-quarantine and the `.command` file is double-click runnable straight out of the box.
+
+### Option B — one-liner (terminal users)
 
 ```bash
 curl -fsSL https://github.com/terajh/vienna/releases/download/v0.6.2/install.sh | bash
 ```
 
-The installer:
+### What the installer does
 
 1. Downloads `Vienna_0.6.2_aarch64.dmg` and `vienna-runtime-0.6.2.tar.gz` from the release.
 2. Copies `Vienna.app` into `/Applications` and strips the macOS quarantine flag.
