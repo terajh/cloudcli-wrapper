@@ -1,5 +1,7 @@
+import { useEffect } from 'react';
 import { X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { useDesignTokens } from '../../../hooks/useDesignTokens';
 import ProviderLoginModal from '../../provider-auth/view/ProviderLoginModal';
 import { Button } from '../../../shared/view/ui';
 import ClaudeMcpFormModal from '../view/modals/ClaudeMcpFormModal';
@@ -82,6 +84,9 @@ function Settings({ isOpen, onClose, projects = [], initialTab = 'agents' }: Set
     unsubscribe: pushUnsubscribe,
   } = useWebPush();
 
+  const { tokens: designTokens, updateToken: updateDesignToken, resetTokens: resetDesignTokens } =
+    useDesignTokens();
+
   const handleEnablePush = async () => {
     await pushSubscribe();
     // Server sets webPush: true in preferences on subscribe; sync local state
@@ -100,6 +105,19 @@ function Settings({ isOpen, onClose, projects = [], initialTab = 'agents' }: Set
     });
   };
 
+  // ESC 키로 설정 모달 닫기. 모달이 열려 있을 때만 리스너를 붙인다.
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.stopPropagation();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) {
     return null;
   }
@@ -113,7 +131,10 @@ function Settings({ isOpen, onClose, projects = [], initialTab = 'agents' }: Set
         : false;
 
   return (
-    <div className="modal-backdrop fixed inset-0 z-[9999] flex items-center justify-center bg-background/80 backdrop-blur-sm md:p-4">
+    // `vienna-main-content` 클래스를 함께 부여해 Vienna 의 글로벌 zoom
+    // ( Cmd+= / Cmd+- ) 가 설정 모달에도 동일하게 적용되도록 한다. 이렇게
+    // 해야 모달 폰트 사이즈가 사이드바·컨텐츠 영역과 통일된다.
+    <div className="vienna-main-content modal-backdrop fixed inset-0 z-[9999] flex items-center justify-center bg-background/80 backdrop-blur-sm md:p-4">
       <div className="flex h-full w-full flex-col overflow-hidden border border-border bg-background shadow-2xl md:h-[90vh] md:max-w-4xl md:rounded-xl">
         {/* Header */}
         <div className="flex flex-shrink-0 items-center justify-between border-b border-border px-4 py-3 md:px-5">
@@ -150,6 +171,9 @@ function Settings({ isOpen, onClose, projects = [], initialTab = 'agents' }: Set
                   onCodeEditorShowMinimapChange={(value) => updateCodeEditorSetting('showMinimap', value)}
                   onCodeEditorLineNumbersChange={(value) => updateCodeEditorSetting('lineNumbers', value)}
                   onCodeEditorFontSizeChange={(value) => updateCodeEditorSetting('fontSize', value)}
+                  designTokens={designTokens}
+                  onDesignTokenChange={updateDesignToken}
+                  onResetDesignTokens={resetDesignTokens}
                 />
               )}
 

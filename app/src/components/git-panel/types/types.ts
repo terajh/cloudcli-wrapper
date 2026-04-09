@@ -18,6 +18,20 @@ export type GitPanelProps = {
   onFileOpen?: FileOpenHandler;
 };
 
+export type GitWorktreeStatus = {
+  /** worktree 의 절대 경로 */
+  path: string;
+  /** worktree 디렉토리 basename — UI 에 그룹 라벨로 표시 */
+  name: string;
+  /** worktree 가 체크아웃한 브랜치 (detached 면 null) */
+  branch: string | null;
+  isLocked?: boolean;
+  modified: string[];
+  added: string[];
+  deleted: string[];
+  untracked: string[];
+};
+
 export type GitStatusResponse = {
   branch?: string;
   hasCommits?: boolean;
@@ -25,6 +39,8 @@ export type GitStatusResponse = {
   added?: string[];
   deleted?: string[];
   untracked?: string[];
+  /** 메인 worktree 외에 추가로 등록된 linked worktree 들의 status */
+  worktrees?: GitWorktreeStatus[];
   error?: string;
   details?: string;
 };

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Sidebar from '../sidebar/view/Sidebar';
@@ -7,7 +7,29 @@ import { useWebSocket } from '../../contexts/WebSocketContext';
 import { useDeviceSettings } from '../../hooks/useDeviceSettings';
 import { useSessionProtection } from '../../hooks/useSessionProtection';
 import { useProjectsState } from '../../hooks/useProjectsState';
+import { useUiPreferences } from '../../hooks/useUiPreferences';
+import { useDesignTokens } from '../../hooks/useDesignTokens';
 import MobileNav from './MobileNav';
+
+// 사이드바 접힘 애니메이션 스펙
+// - 펼침 너비: localStorage `vienna_sidebar_width` 에 저장된 값 (기본 280)
+// - 접힘 너비: 78px — macOS 신호등 버튼(red/yellow/green) 우측 끝에 딱 맞게 정렬
+const COLLAPSED_SIDEBAR_WIDTH = 78;
+const SIDEBAR_WIDTH_STORAGE_KEY = 'vienna_sidebar_width';
+const SIDEBAR_WIDTH_LEGACY_KEY = 'caui_sidebar_width';
+const DEFAULT_SIDEBAR_WIDTH = 280;
+const MIN_SIDEBAR_WIDTH = 200;
+const MAX_SIDEBAR_WIDTH = 480;
+
+const readSavedSidebarWidth = (): number => {
+  if (typeof window === 'undefined') return DEFAULT_SIDEBAR_WIDTH;
+  const saved =
+    window.localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY) ||
+    window.localStorage.getItem(SIDEBAR_WIDTH_LEGACY_KEY);
+  const parsed = saved ? parseInt(saved, 10) : DEFAULT_SIDEBAR_WIDTH;
+  if (!Number.isFinite(parsed)) return DEFAULT_SIDEBAR_WIDTH;
+  return Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, parsed));
+};
 
 export default function AppContent() {
   const navigate = useNavigate();
@@ -15,7 +37,32 @@ export default function AppContent() {
   const { t } = useTranslation('common');
   const { isMobile } = useDeviceSettings({ trackPWA: false });
   const { ws, sendMessage, latestMessage, isConnected } = useWebSocket();
+  const { preferences } = useUiPreferences();
+  // 사용자가 설정에서 background 색을 바꾸면 즉시 wide 컨텐츠 영역이
+  // 따라오도록, hex 값을 직접 인라인 스타일로 박는다.
+  // useDesignTokens 의 broadcast 이벤트로 다른 인스턴스가 동기화되어
+  // React 가 AppContent 를 새 hex 로 다시 렌더한다.
+  const { tokens: designTokens } = useDesignTokens();
   const wasConnectedRef = useRef(false);
+
+  // 사이드바 접힘 상태와 펼침 너비를 AppContent 가 소유한다.
+  // - SidebarContent 의 resize 핸들이 너비를 바꾸면 'vienna-sidebar-width-changed'
+  //   custom event 로 통지받아 동기화한다.
+  // - wrapper 자체에 transition-[width] 를 걸어 접힘/펼침이 부드럽게 동작.
+  const [savedSidebarWidth, setSavedSidebarWidth] = useState<number>(() => readSavedSidebarWidth());
+  const isSidebarCollapsed = !isMobile && preferences.sidebarVisible === false;
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ width: number }>).detail;
+      if (detail && Number.isFinite(detail.width)) {
+        setSavedSidebarWidth(
+          Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, detail.width)),
+        );
+      }
+    };
+    window.addEventListener('vienna-sidebar-width-changed', handler as EventListener);
+    return () => window.removeEventListener('vienna-sidebar-width-changed', handler as EventListener);
+  }, []);
 
   const {
     activeSessions,
@@ -174,14 +221,10 @@ export default function AppContent() {
 
   return (
     <div
-      // Lift the chat surface slightly off pure `bg-background` so the dark
-      // theme reads as a layered panel instead of one solid black slab.
-      // Same color-mix trick the sidebar uses, but with a smaller offset so
-      // the sidebar still reads as the *more* elevated panel of the two.
+      // 컨텐츠 영역(사이드바 우측 wide 배경) 은 사용자 background hex 를
+      // 직접 인라인으로 적용해 React 가 토큰 변화 시 즉시 다시 페인트하도록 한다.
       className="fixed inset-0 flex"
-      style={{
-        backgroundColor: 'color-mix(in srgb, var(--background) 94%, var(--foreground) 6%)',
-      }}
+      style={{ backgroundColor: designTokens.background }}
     >
       {/*
         Vienna(Tauri) — macOS title bar drag region.
@@ -206,7 +249,10 @@ export default function AppContent() {
         aria-hidden="true"
       />
       {!isMobile ? (
-        <div className="vienna-sidebar h-full flex-shrink-0 border-r border-border/50">
+        <div
+          className="vienna-sidebar h-full flex-shrink-0 overflow-hidden border-r border-border/50 transition-[width] duration-300 ease-in-out"
+          style={{ width: `${isSidebarCollapsed ? COLLAPSED_SIDEBAR_WIDTH : savedSidebarWidth}px` }}
+        >
           <Sidebar {...sidebarSharedProps} />
         </div>
       ) : (

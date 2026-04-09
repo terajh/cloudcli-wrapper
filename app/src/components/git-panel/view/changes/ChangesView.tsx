@@ -1,6 +1,6 @@
-import { GitBranch, GitCommit, RefreshCw } from 'lucide-react';
+import { ChevronDown, ChevronRight, GitBranch, GitCommit, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { ConfirmationRequest, FileStatusCode, GitDiffMap, GitStatusResponse } from '../../types/types';
+import type { ConfirmationRequest, FileStatusCode, GitDiffMap, GitStatusResponse, GitWorktreeStatus } from '../../types/types';
 import { getAllChangedFiles, hasChangedFiles } from '../../utils/gitPanelUtils';
 import CommitComposer from './CommitComposer';
 import FileChangeList from './FileChangeList';
@@ -255,9 +255,108 @@ export default function ChangesView({
                 onRequestFileAction={requestFileAction}
               />
             )}
+
+            {/* WORKTREES — 메인 worktree 외 추가로 등록된 worktree 들의
+                변경사항을 그룹별로 표시. read-only 요약(파일 목록만)이며,
+                각 worktree 의 staging/commit 은 그 worktree 를 직접 선택해서
+                작업해야 한다. */}
+            {gitStatus.worktrees && gitStatus.worktrees.length > 0 && (
+              <WorktreeGroups worktrees={gitStatus.worktrees} />
+            )}
           </div>
         )}
       </div>
     </>
+  );
+}
+
+// === Worktree group section ================================================
+
+function countWorktreeFiles(wt: GitWorktreeStatus): number {
+  return wt.modified.length + wt.added.length + wt.deleted.length + wt.untracked.length;
+}
+
+function WorktreeGroups({ worktrees }: { worktrees: GitWorktreeStatus[] }) {
+  return (
+    <>
+      <div className="mt-4 flex items-center gap-1.5 border-y border-border/60 bg-muted/20 px-3 py-1.5">
+        <GitBranch className="h-3 w-3 text-muted-foreground" />
+        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Worktrees ({worktrees.length})
+        </span>
+      </div>
+      {worktrees.map((wt) => (
+        <WorktreeGroup key={wt.path} worktree={wt} />
+      ))}
+    </>
+  );
+}
+
+function WorktreeGroup({ worktree }: { worktree: GitWorktreeStatus }) {
+  const fileCount = countWorktreeFiles(worktree);
+  const [isExpanded, setIsExpanded] = useState(fileCount > 0);
+
+  return (
+    <div className="border-b border-border/40">
+      <button
+        type="button"
+        onClick={() => setIsExpanded((prev) => !prev)}
+        className="flex w-full items-center gap-1.5 px-3 py-1.5 text-left transition-colors hover:bg-muted/30"
+      >
+        {isExpanded ? (
+          <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+        ) : (
+          <ChevronRight className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+        )}
+        <span className="truncate text-xs font-medium text-foreground" title={worktree.path}>
+          {worktree.name}
+        </span>
+        {worktree.branch && (
+          <span className="truncate text-[10px] text-muted-foreground/70">({worktree.branch})</span>
+        )}
+        <span className="ml-auto flex-shrink-0 text-[10px] tabular-nums text-muted-foreground">
+          {fileCount}
+        </span>
+      </button>
+      {isExpanded && (
+        <div className="bg-muted/10 px-3 py-1.5">
+          {fileCount === 0 ? (
+            <div className="text-[11px] text-muted-foreground/60 italic">변경사항 없음</div>
+          ) : (
+            <ul className="space-y-0.5 text-[11px]">
+              {worktree.modified.map((f) => (
+                <WorktreeFileLine key={`m-${f}`} status="M" file={f} />
+              ))}
+              {worktree.added.map((f) => (
+                <WorktreeFileLine key={`a-${f}`} status="A" file={f} />
+              ))}
+              {worktree.deleted.map((f) => (
+                <WorktreeFileLine key={`d-${f}`} status="D" file={f} />
+              ))}
+              {worktree.untracked.map((f) => (
+                <WorktreeFileLine key={`u-${f}`} status="U" file={f} />
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function WorktreeFileLine({ status, file }: { status: 'M' | 'A' | 'D' | 'U'; file: string }) {
+  const colorMap: Record<typeof status, string> = {
+    M: 'text-amber-500',
+    A: 'text-green-500',
+    D: 'text-red-500',
+    U: 'text-muted-foreground',
+  };
+  return (
+    <li className="flex items-center gap-2">
+      <span className={`w-3 flex-shrink-0 font-mono ${colorMap[status]}`}>{status}</span>
+      <span className="truncate text-foreground/80" title={file}>
+        {file}
+      </span>
+    </li>
   );
 }

@@ -10,8 +10,21 @@ const router = express.Router();
 const COMMIT_DIFF_CHARACTER_LIMIT = 500_000;
 
 function spawnAsync(command, args, options = {}) {
+  // git 호출 시 항상 `-c core.quotepath=false` 를 prepend 해서
+  // 한글/이모지/공백 등 멀티바이트 파일명이 octal escape (\354\232\260...)
+  // 형태로 인코딩되지 않고 UTF-8 그대로 출력되도록 강제한다.
+  // 이렇게 해야 status / diff / log 결과의 파일명이 깨지지 않고,
+  // 클라이언트가 그 파일명으로 다시 fetch 할 때 404 가 나지 않는다.
+  let resolvedArgs = args;
+  if (command === 'git' && Array.isArray(args)) {
+    const alreadyQuoted = args[0] === '-c' && /core\.quotepath=/.test(args[1] || '');
+    if (!alreadyQuoted) {
+      resolvedArgs = ['-c', 'core.quotepath=false', ...args];
+    }
+  }
+
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
+    const child = spawn(command, resolvedArgs, {
       ...options,
       shell: false,
     });
@@ -37,13 +50,196 @@ function spawnAsync(command, args, options = {}) {
         return;
       }
 
-      const error = new Error(`Command failed: ${command} ${args.join(' ')}`);
+      const error = new Error(`Command failed: ${command} ${resolvedArgs.join(' ')}`);
       error.code = code;
       error.stdout = stdout;
       error.stderr = stderr;
       reject(error);
     });
   });
+}
+
+/**
+ * Git porcelain / diff 출력은 공백·특수문자를 포함한 파일명을 큰따옴표로
+ * 감싸고 내부의 backslash, quote, control chars 를 C-style escape (\\, \",
+ * \t, \n, octal \NNN) 로 인코딩한다. `core.quotepath=false` 로도 octal
+ * escape 만 풀릴 뿐 surrounding quotes 와 \\ / \" 는 그대로 남는다.
+ *
+ * 이 헬퍼는 그런 인코딩된 경로를 원본 UTF-8 문자열로 복원한다.
+ *  - 양 끝 큰따옴표 제거
+ *  - C-style escape 디코딩
+ *  - octal escape 는 byte 시퀀스로 모아서 UTF-8 디코딩
+ *
+ * 따옴표가 없는 일반 경로는 그대로 반환한다.
+ */
+function unquoteGitPath(rawPath) {
+  if (typeof rawPath !== 'string') return rawPath;
+  if (rawPath.length < 2 || rawPath[0] !== '"' || rawPath[rawPath.length - 1] !== '"') {
+    return rawPath;
+  }
+
+  const inner = rawPath.slice(1, -1);
+  const bytes = [];
+
+  for (let i = 0; i < inner.length; i += 1) {
+    const ch = inner[i];
+    if (ch !== '\\') {
+      bytes.push(...Buffer.from(ch, 'utf8'));
+      continue;
+    }
+    const next = inner[i + 1];
+    if (next === undefined) {
+      bytes.push(0x5c);
+      continue;
+    }
+    if (next >= '0' && next <= '7') {
+      // octal \NNN (1-3 digits)
+      let octal = next;
+      let consumed = 1;
+      if (inner[i + 2] >= '0' && inner[i + 2] <= '7') {
+        octal += inner[i + 2];
+        consumed += 1;
+        if (inner[i + 3] >= '0' && inner[i + 3] <= '7') {
+          octal += inner[i + 3];
+          consumed += 1;
+        }
+      }
+      bytes.push(parseInt(octal, 8));
+      i += consumed;
+      continue;
+    }
+    const map = { a: 0x07, b: 0x08, t: 0x09, n: 0x0a, v: 0x0b, f: 0x0c, r: 0x0d, '"': 0x22, '\\': 0x5c };
+    if (next in map) {
+      bytes.push(map[next]);
+      i += 1;
+      continue;
+    }
+    // unknown escape — keep both chars
+    bytes.push(0x5c, ...Buffer.from(next, 'utf8'));
+    i += 1;
+  }
+
+  return Buffer.from(bytes).toString('utf8');
+}
+
+/**
+ * `git worktree list --porcelain` 출력을 파싱해 worktree 메타데이터를 돌려준다.
+ * 메인 worktree 도 결과에 포함되며 `isMain: true` 로 표시된다.
+ *
+ * 출력 예시:
+ *   worktree /Users/foo/proj
+ *   HEAD abc123...
+ *   branch refs/heads/main
+ *
+ *   worktree /Users/foo/proj/wt-demo
+ *   HEAD def456...
+ *   branch refs/heads/feature/demo
+ */
+async function getWorktrees(projectPath) {
+  try {
+    const { stdout } = await spawnAsync('git', ['worktree', 'list', '--porcelain'], { cwd: projectPath });
+    const worktrees = [];
+    let current = null;
+    for (const rawLine of stdout.split('\n')) {
+      const line = rawLine.trimEnd();
+      if (!line) {
+        if (current) {
+          worktrees.push(current);
+          current = null;
+        }
+        continue;
+      }
+      if (line.startsWith('worktree ')) {
+        current = { path: line.slice('worktree '.length), head: '', branch: null, isLocked: false, isMain: false };
+      } else if (current && line.startsWith('HEAD ')) {
+        current.head = line.slice('HEAD '.length);
+      } else if (current && line.startsWith('branch ')) {
+        current.branch = line.slice('branch refs/heads/'.length) || line.slice('branch '.length);
+      } else if (current && line === 'detached') {
+        current.branch = null;
+      } else if (current && line.startsWith('locked')) {
+        current.isLocked = true;
+      }
+    }
+    if (current) worktrees.push(current);
+
+    // 첫 번째 항목이 메인 worktree (git 의 컨벤션)
+    if (worktrees.length > 0) {
+      worktrees[0].isMain = true;
+    }
+    return worktrees;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * 특정 작업 디렉토리(메인 또는 worktree)의 status 를 조회해
+ * { branch, modified, added, deleted, untracked } 형태로 돌려준다.
+ *
+ * `--untracked-files=all` 을 강제해, untracked 디렉토리가 단일 entry
+ * (`worktree-demo/`) 가 아니라 그 안의 개별 파일로 expand 되도록 한다.
+ * 그래야 사용자가 폴더 entry 를 클릭했을 때 404 가 나지 않는다.
+ */
+async function getStatusForCwd(cwd) {
+  const result = { modified: [], added: [], deleted: [], untracked: [] };
+  try {
+    const { stdout } = await spawnAsync('git', ['status', '--porcelain', '--untracked-files=all'], { cwd });
+    stdout.split('\n').forEach((line) => {
+      if (!line.trim()) return;
+      const status = line.substring(0, 2);
+      const file = unquoteGitPath(line.substring(3));
+      if (status === 'M ' || status === ' M' || status === 'MM') {
+        result.modified.push(file);
+      } else if (status === 'A ' || status === 'AM') {
+        result.added.push(file);
+      } else if (status === 'D ' || status === ' D') {
+        result.deleted.push(file);
+      } else if (status === '??') {
+        result.untracked.push(file);
+      }
+    });
+  } catch {
+    // 워크트리 디렉토리가 깨졌거나 prune 대상이면 빈 결과 반환
+  }
+  return result;
+}
+
+/**
+ * `git worktree list` 가 놓치는 worktree 를 잡기 위한 fallback.
+ *
+ * 프로젝트 루트의 top-level 디렉토리를 스캔해서 그 안에 `.git` 이
+ * "파일" 형태로 존재하면 (디렉토리가 아니라 `gitdir: ...` 한 줄짜리
+ * pointer file 이면) → worktree-like 디렉토리로 간주한다.
+ *
+ * `git worktree add` 로 만든 정상 worktree 는 git 명령으로 잡히지만,
+ * metadata 가 깨졌거나 다른 repo 에서 link 된 경우 `git worktree list`
+ * 출력에서 빠질 수 있다. 그런 케이스를 잡기 위함.
+ */
+async function detectWorktreeLikeDirectories(projectPath) {
+  const dirs = [];
+  try {
+    const entries = await fs.readdir(projectPath, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      if (entry.name === '.git') continue;
+      const gitMarker = path.join(projectPath, entry.name, '.git');
+      try {
+        const stat = await fs.stat(gitMarker);
+        if (stat.isFile()) {
+          dirs.push({
+            name: entry.name,
+            path: path.join(projectPath, entry.name),
+          });
+        }
+      } catch {
+        // .git 마커 없음 — 워크트리 아님
+      }
+    }
+  } catch {
+    // 프로젝트 디렉토리 읽기 실패
+  }
+  return dirs;
 }
 
 // Input validation helpers (defense-in-depth)
@@ -226,8 +422,11 @@ function parseStatusFilePaths(statusOutput) {
     .filter((line) => line.trim())
     .map((line) => {
       const statusPath = line.substring(3);
+      // rename 의 경우 "old -> new" 형태인데 양 쪽 모두 따옴표로 감쌀 수 있으므로
+      // unquote 후 ` -> ` 로 split 한다.
       const renamedFilePath = statusPath.split(' -> ')[1];
-      return normalizeRepositoryRelativeFilePath(renamedFilePath || statusPath);
+      const targetPath = renamedFilePath || statusPath;
+      return normalizeRepositoryRelativeFilePath(unquoteGitPath(targetPath));
     })
     .filter(Boolean);
 }
@@ -304,30 +503,84 @@ router.get('/status', async (req, res) => {
     const branch = await getCurrentBranchName(projectPath);
     const hasCommits = await repositoryHasCommits(projectPath);
 
-    // Get git status
-    const { stdout: statusOutput } = await spawnAsync('git', ['status', '--porcelain'], { cwd: projectPath });
+    // worktree 목록을 두 가지 방법으로 조회해서 합친다:
+    //  1) `git worktree list --porcelain` (정상 등록된 worktree)
+    //  2) 파일시스템 스캔 (`.git` 파일을 가진 top-level 디렉토리)
+    // 두 결과를 path 기준으로 dedupe.
+    const gitWorktrees = await getWorktrees(projectPath);
+    const mainWorktree = gitWorktrees.find((w) => w.isMain);
+    const mainWorktreePath = mainWorktree?.path || projectPath;
 
-    const modified = [];
-    const added = [];
-    const deleted = [];
-    const untracked = [];
-
-    statusOutput.split('\n').forEach(line => {
-      if (!line.trim()) return;
-
-      const status = line.substring(0, 2);
-      const file = line.substring(3);
-
-      if (status === 'M ' || status === ' M' || status === 'MM') {
-        modified.push(file);
-      } else if (status === 'A ' || status === 'AM') {
-        added.push(file);
-      } else if (status === 'D ' || status === ' D') {
-        deleted.push(file);
-      } else if (status === '??') {
-        untracked.push(file);
+    const fsWorktrees = await detectWorktreeLikeDirectories(mainWorktreePath);
+    const knownPaths = new Set(gitWorktrees.map((w) => w.path));
+    for (const fsW of fsWorktrees) {
+      if (!knownPaths.has(fsW.path)) {
+        // git 명령에선 안 잡혔지만 .git 마커가 있는 디렉토리 — 워크트리로 간주
+        gitWorktrees.push({
+          path: fsW.path,
+          head: '',
+          branch: null,
+          isLocked: false,
+          isMain: false,
+        });
       }
-    });
+    }
+    const allWorktrees = gitWorktrees;
+
+    // 메인 worktree 안에 들어 있는 linked worktree 디렉토리 이름들 (상대 경로)
+    // 메인 status 의 untracked 에서 이 디렉토리들에 속한 파일을 제외한다.
+    const linkedWorktreesInsideMain = allWorktrees
+      .filter((w) => !w.isMain)
+      .map((w) => {
+        const relative = path.relative(mainWorktreePath, w.path);
+        return relative && !relative.startsWith('..') ? relative : null;
+      })
+      .filter(Boolean);
+
+    const isInsideLinkedWorktree = (filePath) => {
+      // `--untracked-files=all` 사용 시 디렉토리가 개별 파일로 expand 되므로
+      // 파일 경로가 linked worktree 디렉토리 prefix 로 시작하는지만 확인.
+      const normalized = filePath.replace(/\/$/, '');
+      return linkedWorktreesInsideMain.some(
+        (wt) => normalized === wt || normalized.startsWith(`${wt}/`),
+      );
+    };
+
+    const mainStatus = await getStatusForCwd(mainWorktreePath);
+    const modified = mainStatus.modified.filter((f) => !isInsideLinkedWorktree(f));
+    const added = mainStatus.added.filter((f) => !isInsideLinkedWorktree(f));
+    const deleted = mainStatus.deleted.filter((f) => !isInsideLinkedWorktree(f));
+    const untracked = mainStatus.untracked.filter((f) => !isInsideLinkedWorktree(f));
+
+    // 각 worktree 의 status 를 병렬 조회.
+    // branch 가 비어 있으면 (fs scan 으로 잡힌 stale worktree) 해당
+    // 디렉토리에서 git symbolic-ref 로 한 번 더 시도.
+    const worktreeStatuses = await Promise.all(
+      allWorktrees.map(async (wt) => {
+        if (wt.isMain) return null;
+        const status = await getStatusForCwd(wt.path);
+        let branch = wt.branch;
+        if (!branch) {
+          try {
+            const { stdout } = await spawnAsync(
+              'git',
+              ['symbolic-ref', '--short', 'HEAD'],
+              { cwd: wt.path },
+            );
+            branch = stdout.trim() || null;
+          } catch {
+            branch = null;
+          }
+        }
+        return {
+          path: wt.path,
+          name: path.basename(wt.path),
+          branch,
+          isLocked: wt.isLocked,
+          ...status,
+        };
+      }),
+    );
 
     res.json({
       branch,
@@ -335,7 +588,8 @@ router.get('/status', async (req, res) => {
       modified,
       added,
       deleted,
-      untracked
+      untracked,
+      worktrees: worktreeStatuses.filter(Boolean),
     });
   } catch (error) {
     console.error('Git status error:', error);

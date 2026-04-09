@@ -109,10 +109,31 @@ export default function CodeEditor({
     [file, isExpanded, isSidebar, onPopOut, onToggleExpand, showDiff, t],
   );
 
+  // CodeMirror 의 font-size 는 wrapper 의 inline `style={{ fontSize }}` 만으로는
+  // 안정적으로 적용되지 않는다(특히 oneDark 처럼 자체 theme 이 cm-content 에
+  // 별도 font-size 를 입힐 때). EditorView.theme 으로 직접 박아서 해결.
+  // 가로로 긴 라인을 가진 파일에서 갑자기 글자가 커지는 현상의 원인.
+  const fontSizeExtension = useMemo(
+    () =>
+      EditorView.theme({
+        '&': {
+          fontSize: `${fontSize}px`,
+        },
+        '.cm-content': {
+          fontSize: `${fontSize}px`,
+        },
+        '.cm-gutters': {
+          fontSize: `${fontSize}px`,
+        },
+      }),
+    [fontSize],
+  );
+
   const extensions = useMemo(() => {
     const allExtensions: Extension[] = [
       ...getLanguageExtensions(file.name),
       ...toolbarPanelExtension,
+      fontSizeExtension,
     ];
 
     if (file.diffInfo && showDiff && file.diffInfo.old_string !== undefined) {
@@ -137,6 +158,7 @@ export default function CodeEditor({
   }, [
     file.diffInfo,
     file.name,
+    fontSizeExtension,
     minimapExtension,
     scrollToFirstChunkExtension,
     showDiff,

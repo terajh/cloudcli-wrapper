@@ -85,7 +85,22 @@
   }
 
   .dark {
-    --background: 0 0% 5%;
+    /* === 디자인 시스템 베이스 컬러 ===
+     *
+     * Vienna 의 모든 어두운 영역은 단 하나의 "A 색상" 에서 파생된다.
+     * - `--app-base-l` : A 색상의 HSL Lightness (0% = 검은색).
+     *   이 값만 바꾸면 컨텐츠 영역과 사이드바의 톤이 함께 따라온다.
+     * - `--sidebar-lift` : 사이드바가 A 보다 얼마나 더 밝은지.
+     *   (예: 12% 면 A 가 0% 일 때 사이드바는 12%)
+     *
+     * 컨텐츠 영역 = A 그대로  (`hsl(var(--background))`)
+     * 사이드바 영역 = A + lift (`hsl(var(--sidebar-background))`)
+     */
+    --app-base-l: 0%;
+    --sidebar-lift: 12%;
+
+    --background: 0 0% var(--app-base-l);
+    --sidebar-background: 0 0% calc(var(--app-base-l) + var(--sidebar-lift));
     --foreground: 210 40% 98%;
     --card: 0 0% 9%;
     --card-foreground: 210 40% 98%;
@@ -120,23 +135,40 @@
 }
 
 @layer base {
+  /* === 사용자 디자인 토큰 변수 (useDesignTokens 가 동적으로 채움) === */
+  :root {
+    --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --font-code: ui-monospace, "SF Mono", "Cascadia Mono", "JetBrains Mono", Menlo, Monaco, Consolas, monospace;
+  }
+
   * {
     @apply border-border;
     box-sizing: border-box;
     transition: none;
   }
-  
+
   body {
     @apply bg-background text-foreground;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-family: var(--font-ui);
     margin: 0;
     padding: 0;
+    /* 위·아래 바운스/스크롤을 전역적으로 차단해 화면이 살짝 따라오는 현상 제거. */
+    overflow: hidden;
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: auto;
+  }
+
+  /* code / pre 와 명시적으로 모노스페이스가 필요한 영역은 코드 폰트 사용. */
+  code, pre, kbd, samp, .vienna-mono {
+    font-family: var(--font-code);
   }
 
   html, body {
     height: 100%;
     margin: 0;
     padding: 0;
+    overflow: hidden;
+    overscroll-behavior: none;
   }
   
   /* Root element with safe area padding for PWA */
@@ -427,6 +459,29 @@
     --tw-ring-offset-color: rgb(31 41 55); /* gray-800 */
   }
   
+  /* CodeMirror 에디터의 폰트 사이즈 강제 잠금.
+   * - oneDark theme / wrapper inline style / EditorView.theme 어느 것도
+   *   가로 라인이 긴 파일이나 scroll 상황에서 안정적으로 동작하지 않는다.
+   * - 13px 으로 글로벌 !important 박아서 모든 override 무력화.
+   * - 추가로 zoom/transform/scale 도 1 로 잠가서 외부 zoom 컨텍스트의
+   *   영향도 차단. (Vienna 의 .vienna-main-content { zoom: ... } 가
+   *   에디터에 누적되는 케이스 방지) */
+  .cm-editor,
+  .cm-editor .cm-scroller,
+  .cm-editor .cm-content,
+  .cm-editor .cm-line,
+  .cm-editor .cm-lineNumbers,
+  .cm-editor .cm-gutters,
+  .cm-editor .cm-gutterElement,
+  .cm-editor .cm-foldGutter {
+    font-size: 13px !important;
+    line-height: 1.5 !important;
+  }
+  .cm-editor {
+    zoom: 1 !important;
+    transform: none !important;
+  }
+
   /* Ensure textarea text is always visible in dark mode */
   textarea {
     color-scheme: light dark;

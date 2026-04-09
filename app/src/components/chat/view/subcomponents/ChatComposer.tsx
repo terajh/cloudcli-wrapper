@@ -332,9 +332,6 @@ export default function ChatComposer({
                 onToggleCommandMenu={onToggleCommandMenu}
                 hasInput={hasInput}
                 onClearInput={onClearInput}
-                isUserScrolledUp={isUserScrolledUp}
-                hasMessages={hasMessages}
-                onScrollToBottom={onScrollToBottom}
               />
             </div>
 

@@ -50,7 +50,10 @@ function MainContent({
   externalMessageUpdate,
 }: MainContentProps) {
   const { preferences } = useUiPreferences();
-  const { autoExpandTools, showRawParameters, showThinking, autoScrollToBottom, sendByCtrlEnter } = preferences;
+  const { autoExpandTools, showRawParameters, showThinking, autoScrollToBottom, sendByCtrlEnter, sidebarVisible } = preferences;
+  // 사이드바가 접혔을 때(macOS Vienna 데스크톱 한정) 메인 컨텐츠 헤더 좌측이
+  // OS 신호등(좌측 ~78px) 영역과 겹친다. 헤더에 좌측 패딩을 추가해 회피한다.
+  const isSidebarCollapsed = !isMobile && !sidebarVisible;
 
   const { currentProject, setCurrentProject } = useTaskMaster() as TaskMasterContextValue;
   const { tasksEnabled, isTaskMasterInstalled } = useTasksSettings() as TasksSettingsContextValue;
@@ -105,6 +108,7 @@ function MainContent({
         shouldShowTasksTab={shouldShowTasksTab}
         isMobile={isMobile}
         onMenuClick={onMenuClick}
+        isSidebarCollapsed={isSidebarCollapsed}
       />
 
       <div className="flex min-h-0 flex-1 overflow-hidden">

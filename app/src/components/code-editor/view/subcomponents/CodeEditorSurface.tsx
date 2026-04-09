@@ -1,3 +1,4 @@
+import type React from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { oneDark } from '@codemirror/theme-one-dark';
 import type { Extension } from '@codemirror/state';
@@ -34,29 +35,34 @@ export default function CodeEditorSurface({
     );
   }
 
+  // index.css 의 글로벌 `!important` 폰트 잠금이 `--cm-fs` 변수를 사용한다.
+  // 사용자 설정 fontSize 를 wrapper 의 inline CSS 변수로 주입해, CodeMirror
+  // 내부 element 들이 모두 동일한 사이즈로 그려지도록 한다.
   return (
-    <CodeMirror
-      value={content}
-      onChange={onChange}
-      extensions={extensions}
-      theme={isDarkMode ? oneDark : undefined}
-      height="100%"
-      style={{
-        fontSize: `${fontSize}px`,
-        height: '100%',
-      }}
-      basicSetup={{
-        lineNumbers: showLineNumbers,
-        foldGutter: true,
-        dropCursor: false,
-        allowMultipleSelections: false,
-        indentOnInput: true,
-        bracketMatching: true,
-        closeBrackets: true,
-        autocompletion: true,
-        highlightSelectionMatches: true,
-        searchKeymap: true,
-      }}
-    />
+    <div
+      className="h-full w-full"
+      style={{ ['--cm-fs' as string]: `${fontSize}px` } as React.CSSProperties}
+    >
+      <CodeMirror
+        value={content}
+        onChange={onChange}
+        extensions={extensions}
+        theme={isDarkMode ? oneDark : undefined}
+        height="100%"
+        style={{ height: '100%' }}
+        basicSetup={{
+          lineNumbers: showLineNumbers,
+          foldGutter: true,
+          dropCursor: false,
+          allowMultipleSelections: false,
+          indentOnInput: true,
+          bracketMatching: true,
+          closeBrackets: true,
+          autocompletion: true,
+          highlightSelectionMatches: true,
+          searchKeymap: true,
+        }}
+      />
+    </div>
   );
 }

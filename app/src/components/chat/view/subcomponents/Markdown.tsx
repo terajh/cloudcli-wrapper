@@ -94,7 +94,10 @@ const CodeBlock = ({ node, inline, className, children, ...props }: CodeBlockPro
   const padding = language && language !== 'text' ? '2rem 1rem 1rem 1rem' : '1rem';
 
   return (
-    <div className="group relative my-2">
+    // `not-prose` 로 Tailwind Typography 의 기본 <pre>/<code> 스타일을
+    // 이 블록 내부에서 비활성화한다. 이렇게 해야 prose 가 이중 배경(검은 박스)
+    // 을 입히지 않고, SyntaxHighlighter 의 One Dark 박스만 깔끔하게 보인다.
+    <div className="not-prose group relative my-2">
       {language && language !== 'text' && (
         <div className="absolute left-3 top-2 z-10 text-xs font-medium uppercase text-gray-400">{language}</div>
       )}

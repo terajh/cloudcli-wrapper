@@ -134,7 +134,10 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, o
                 ))}
               </div>
             )}
-            <div className="mt-1 flex items-center justify-end gap-1 text-xs text-muted-foreground">
+            {/* 메시지 본문(text-sm = 14px) 보다 절반 가까이 작게: 9px.
+                copy 버튼/타임스탬프 등 보조 정보가 본문에 비해 시각적으로
+                덜 튀도록. */}
+            <div className="mt-1 flex items-center justify-end gap-1 text-[9px] leading-none text-muted-foreground/70">
               {shouldShowUserCopyControl && (
                 <MessageCopyControl content={userCopyContent} messageType="user" />
               )}

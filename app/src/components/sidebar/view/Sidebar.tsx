@@ -276,7 +276,15 @@ function Sidebar({
             onCreateProject={() => setShowNewProject(true)}
             onOpenProjectFilter={() => setShowProjectFilter(true)}
             onCollapseSidebar={handleCollapseSidebar}
-            onNewSession={() => { if (selectedProject) onNewSession(selectedProject); }}
+            onNewSession={() => {
+              // 현재 선택된 프로젝트가 있으면 그 프로젝트에서 새 세션을 만들고,
+              // 없으면 새 프로젝트 생성 모달을 띄운다.
+              if (selectedProject) {
+                onNewSession(selectedProject);
+              } else {
+                setShowNewProject(true);
+              }
+            }}
             updateAvailable={updateAvailable}
             releaseInfo={releaseInfo}
             latestVersion={latestVersion}

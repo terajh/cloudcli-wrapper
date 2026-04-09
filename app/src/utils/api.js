@@ -89,6 +89,10 @@ export const api = {
     authenticatedFetch(`/api/gemini/sessions/${sessionId}`, {
       method: 'DELETE',
     }),
+  deleteCursorSession: (sessionId, projectName) =>
+    authenticatedFetch(`/api/cursor/sessions/${sessionId}${projectName ? `?projectName=${encodeURIComponent(projectName)}` : ''}`, {
+      method: 'DELETE',
+    }),
   deleteProject: (projectName, force = false) =>
     authenticatedFetch(`/api/projects/${projectName}${force ? '?force=true' : ''}`, {
       method: 'DELETE',

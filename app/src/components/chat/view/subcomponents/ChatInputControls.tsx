@@ -15,9 +15,6 @@ interface ChatInputControlsProps {
   onToggleCommandMenu: () => void;
   hasInput: boolean;
   onClearInput: () => void;
-  isUserScrolledUp: boolean;
-  hasMessages: boolean;
-  onScrollToBottom: () => void;
 }
 
 export default function ChatInputControls({
@@ -31,9 +28,6 @@ export default function ChatInputControls({
   onToggleCommandMenu,
   hasInput,
   onClearInput,
-  isUserScrolledUp,
-  hasMessages,
-  onScrollToBottom,
 }: ChatInputControlsProps) {
   const { t } = useTranslation('chat');
 
@@ -121,17 +115,6 @@ export default function ChatInputControls({
         </button>
       )}
 
-      {isUserScrolledUp && hasMessages && (
-        <button
-          onClick={onScrollToBottom}
-          className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground shadow-sm transition-all duration-200 hover:scale-105 hover:bg-primary/90"
-          title={t('input.scrollToBottom', { defaultValue: 'Scroll to bottom' })}
-        >
-          <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-          </svg>
-        </button>
-      )}
     </div>
   );
 }

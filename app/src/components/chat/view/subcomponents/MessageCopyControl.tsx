@@ -143,7 +143,7 @@ const MessageCopyControl = ({
         className={`inline-flex items-center gap-1 rounded px-1 py-0.5 transition-colors ${toneClass}`}
       >
         {copied ? (
-          <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+          <svg className="h-2.5 w-2.5" viewBox="0 0 20 20" fill="currentColor">
             <path
               fillRule="evenodd"
               d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
@@ -152,7 +152,7 @@ const MessageCopyControl = ({
           </svg>
         ) : (
           <svg
-            className="h-3.5 w-3.5"
+            className="h-2.5 w-2.5"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -164,7 +164,7 @@ const MessageCopyControl = ({
             <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
           </svg>
         )}
-        <span className="text-[10px] font-semibold uppercase tracking-wide">{selectedFormatTag}</span>
+        <span className="text-[9px] font-semibold uppercase tracking-wide">{selectedFormatTag}</span>
       </button>
 
       {canSelectCopyFormat && (

@@ -619,7 +619,11 @@ export function useProjectsState({
     (session: ProjectSession) => {
       setSelectedSession(session);
 
-      if (activeTab === 'tasks' || activeTab === 'preview') {
+      // 사이드바에서 세션을 선택하면 — 어떤 탭(files / shell / git / tasks /
+      // preview / 플러그인 등)을 보고 있었더라도 — 항상 채팅 탭으로 돌아간다.
+      // 사용자가 "이 세션의 대화를 보고 싶어서" 클릭한 것이므로 컨텍스트를
+      // 즉시 chat 으로 전환해 주는 게 자연스럽다.
+      if (activeTab !== 'chat') {
         setActiveTab('chat');
       }
 

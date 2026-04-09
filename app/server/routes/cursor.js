@@ -7,7 +7,8 @@ import sqlite3 from 'sqlite3';
 import { open } from 'sqlite';
 import crypto from 'crypto';
 import { CURSOR_MODELS } from '../../shared/modelConstants.js';
-import { applyCustomSessionNames } from '../database/db.js';
+import { applyCustomSessionNames, sessionNamesDb } from '../database/db.js';
+import { extractProjectDirectory } from '../projects.js';
 
 const router = express.Router();
 
@@ -792,6 +793,46 @@ router.get('/sessions/:sessionId', async (req, res) => {
       error: 'Failed to read Cursor session', 
       details: error.message 
     });
+  }
+});
+
+// DELETE /api/cursor/sessions/:sessionId - Delete a Cursor session directory
+router.delete('/sessions/:sessionId', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    let { projectPath, projectName } = req.query;
+
+    if (!sessionId) {
+      return res.status(400).json({ error: 'sessionId is required' });
+    }
+
+    // Resolve projectPath from projectName if not provided directly
+    if (!projectPath && projectName) {
+      try {
+        projectPath = await extractProjectDirectory(projectName);
+      } catch {
+        // Fall through to cwd
+      }
+    }
+
+    const cwdId = crypto.createHash('md5').update(projectPath || process.cwd()).digest('hex');
+    const sessionPath = path.join(os.homedir(), '.cursor', 'chats', cwdId, sessionId);
+
+    try {
+      await fs.access(sessionPath);
+    } catch {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    await fs.rm(sessionPath, { recursive: true, force: true });
+
+    // Also remove any custom name stored in the DB
+    sessionNamesDb.deleteName(sessionId, 'cursor');
+
+    return res.json({ success: true, sessionId });
+  } catch (error) {
+    console.error('Error deleting Cursor session:', error);
+    return res.status(500).json({ error: 'Failed to delete session', details: error.message });
   }
 });
 

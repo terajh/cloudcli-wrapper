@@ -138,17 +138,15 @@ export default function SidebarSessionItem({
               </div>
             </div>
 
-            {!sessionView.isCursorSession && (
-              <button
-                className="ml-1 flex h-5 w-5 items-center justify-center rounded-md bg-red-50 opacity-70 transition-transform active:scale-95 dark:bg-red-900/20"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  requestDeleteSession();
-                }}
-              >
-                <Trash2 className="h-2.5 w-2.5 text-red-600 dark:text-red-400" />
-              </button>
-            )}
+            <button
+              className="ml-1 flex h-5 w-5 items-center justify-center rounded-md bg-red-50 opacity-70 transition-transform active:scale-95 dark:bg-red-900/20"
+              onClick={(event) => {
+                event.stopPropagation();
+                requestDeleteSession();
+              }}
+            >
+              <Trash2 className="h-2.5 w-2.5 text-red-600 dark:text-red-400" />
+            </button>
           </div>
         </div>
       </div>
@@ -242,7 +240,7 @@ export default function SidebarSessionItem({
           </div>
         )}
 
-        {editingSession !== session.id && !sessionView.isCursorSession && (
+        {editingSession !== session.id && (
           <div className="pointer-events-none absolute right-1 top-1/2 flex -translate-y-1/2 transform items-center opacity-0 transition-opacity duration-150 group-hover:opacity-100">
             <button
               className="pointer-events-auto flex h-5 w-5 items-center justify-center rounded transition-colors hover:bg-red-500/15"

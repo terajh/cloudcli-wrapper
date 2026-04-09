@@ -437,6 +437,7 @@ export function useSidebarController({
     const deletePromise = (() => {
       if (provider === 'codex') return api.deleteCodexSession(sessionId);
       if (provider === 'gemini') return api.deleteGeminiSession(sessionId);
+      if (provider === 'cursor') return api.deleteCursorSession(sessionId, projectName);
       return api.deleteSession(projectName, sessionId);
     })();
 
@@ -474,6 +475,7 @@ export function useSidebarController({
       const deletePromise = (() => {
         if (provider === 'codex') return api.deleteCodexSession(sessionId);
         if (provider === 'gemini') return api.deleteGeminiSession(sessionId);
+        if (provider === 'cursor') return api.deleteCursorSession(sessionId, projectName);
         return api.deleteSession(projectName, sessionId);
       })();
 

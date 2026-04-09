@@ -12,6 +12,7 @@ export default function MainContentHeader({
   shouldShowTasksTab,
   isMobile,
   onMenuClick,
+  isSidebarCollapsed = false,
 }: MainContentHeaderProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -34,7 +35,11 @@ export default function MainContentHeader({
   }, [updateScrollState]);
 
   return (
-    <div className="pwa-header-safe flex-shrink-0 border-b border-border/60 bg-background px-3 py-1.5 sm:px-4 sm:py-2">
+    <div
+      className={
+        'pwa-header-safe flex-shrink-0 border-b border-border/60 bg-background px-3 py-1.5 sm:px-4 sm:py-2'
+      }
+    >
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {isMobile && <MobileMenuButton onMenuClick={onMenuClick} />}
@@ -46,7 +51,15 @@ export default function MainContentHeader({
           />
         </div>
 
-        <div className="relative min-w-0 flex-shrink overflow-hidden sm:flex-shrink-0">
+        {/*
+          탭 클러스터(chat / shell / files / git)는 상단 28px 의 macOS
+          drag region(`AppContent` 의 `z-[1000]` 띠) 과 시각적으로 겹치는
+          위치에 있다. drag region 이 위에 깔리면 버튼 상단이 클릭되지
+          않으므로, 이 wrapper 에 `relative z-[1001]` 을 부여해 drag region
+          위로 올린다. 버튼 사이 빈 공간은 여전히 drag region 영역이라
+          그 자리는 윈도우 드래그가 정상 동작한다.
+        */}
+        <div className="relative z-[1001] min-w-0 flex-shrink overflow-hidden sm:flex-shrink-0">
           {canScrollLeft && (
             <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-6 bg-gradient-to-r from-background to-transparent" />
           )}

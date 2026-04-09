@@ -140,6 +140,10 @@ export default function SidebarContent({
       if (!isResizingRef.current) return;
       const newWidth = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, e.clientX));
       setSidebarWidth(newWidth);
+      // wrapper(AppContent) 가 너비를 컨트롤하므로 실시간으로 알린다.
+      window.dispatchEvent(
+        new CustomEvent('vienna-sidebar-width-changed', { detail: { width: newWidth } }),
+      );
     };
     const handleMouseUp = () => {
       if (!isResizingRef.current) return;
@@ -158,19 +162,11 @@ export default function SidebarContent({
 
   return (
     <div
-      // Slightly lifted from `bg-background` so the sidebar reads as its own
-      // panel against the chat surface, instead of one solid black slab.
-      // Light layer over `bg-foreground` is the standard "elevated" trick
-      // and respects whatever the user's theme exposes.
-      className="relative flex h-full flex-col bg-background backdrop-blur-sm md:select-none"
-      style={
-        isDesktop
-          ? {
-              width: `${sidebarWidth}px`,
-              backgroundColor: 'color-mix(in srgb, var(--background) 88%, var(--foreground) 12%)',
-            }
-          : undefined
-      }
+      // 사이드바 너비는 wrapper(AppContent) 가 transition 으로 컨트롤한다.
+      // 여기서는 부모 wrapper 의 폭(=collapsed 88px / expanded sidebarWidth)을
+      // 그대로 채우기만 하면 된다.
+      className="relative flex h-full w-full flex-col md:select-none"
+      style={{ backgroundColor: 'hsl(var(--sidebar-background))' }}
     >
       <SidebarHeader
         isPWA={isPWA}

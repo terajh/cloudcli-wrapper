@@ -283,10 +283,14 @@ export default function SidebarProjectItem({
           피하기 위해 형제 엘리먼트로 분리한다. 상단에 sticky로 고정.
         */}
         <div
+          // 사이드바 배경이 회색 톤이므로 sticky 헤더의 배경도 같은 톤으로
+          // 맞춰야 한다. backdrop-blur 는 WKWebView 에서 inline backgroundColor
+          // 페인팅을 깨뜨리므로 사용 금지.
           className={cn(
             'hidden md:flex w-full items-stretch',
-            'md:sticky md:top-0 md:z-10 md:bg-background/95 md:backdrop-blur-sm',
+            'md:sticky md:top-0 md:z-10',
           )}
+          style={{ backgroundColor: 'hsl(var(--sidebar-background))' }}
         >
         <Button
           variant="ghost"
@@ -366,28 +370,49 @@ export default function SidebarProjectItem({
                     </span>
                   );
                 })()}
-                <span className="ml-auto flex-shrink-0 text-[10px] tabular-nums text-muted-foreground/60">
-                  {sessionCountDisplay}
-                </span>
+                {/* ml-auto 만 두고, 실제 우측 끝 슬롯(세션 카운트 ↔ + 버튼)은
+                    Button 바깥 형제 엘리먼트에서 그린다. 여기는 단순히 남는
+                    공간을 모두 좌측 텍스트에 양보하기 위한 spacer 이다. */}
+                <span className="ml-auto" aria-hidden="true" />
               </>
             )}
           </div>
 
         </Button>
         {!isEditing && (
-          <button
-            type="button"
-            className="hidden md:flex h-auto w-7 flex-shrink-0 items-center justify-center rounded opacity-0 transition-opacity duration-200 group-hover:opacity-100 hover:bg-white/10"
-            onClick={(event) => {
-              event.stopPropagation();
-              onProjectSelect(project);
-              onNewSession(project);
-            }}
-            title={t('sessions.newSession') || '새 세션'}
-            aria-label={t('sessions.newSession') || '새 세션'}
-          >
-            <Plus className="h-3.5 w-3.5 text-muted-foreground" />
-          </button>
+          // 우측 끝 트레일링 슬롯: 기본은 세션 카운트가 우측 끝에 보이고,
+          // 마우스 호버 시 카운트가 좌측으로 슬라이드+페이드 아웃되며 동시에
+          // + (새 세션) 버튼이 페이드 인 한다. 두 엘리먼트는 동일한 우측 끝
+          // 위치에 절대 배치되어 자리 교체 효과를 만든다.
+          <div className="relative hidden md:flex h-auto w-7 flex-shrink-0 items-center justify-end pr-1">
+            <span
+              aria-hidden="true"
+              className={cn(
+                'pointer-events-none absolute inset-y-0 right-1 flex items-center text-[10px] tabular-nums text-muted-foreground/60',
+                'transition-all duration-200 ease-out',
+                'group-hover:-translate-x-2 group-hover:opacity-0',
+              )}
+            >
+              {sessionCountDisplay}
+            </span>
+            <button
+              type="button"
+              className={cn(
+                'absolute inset-y-0 right-0 flex w-7 items-center justify-center rounded',
+                'opacity-0 transition-opacity duration-200 ease-out',
+                'group-hover:opacity-100 hover:bg-white/10',
+              )}
+              onClick={(event) => {
+                event.stopPropagation();
+                onProjectSelect(project);
+                onNewSession(project);
+              }}
+              title={t('sessions.newSession') || '새 세션'}
+              aria-label={t('sessions.newSession') || '새 세션'}
+            >
+              <Plus className="h-3.5 w-3.5 text-muted-foreground" />
+            </button>
+          </div>
         )}
         {isEditing && (
           <>
