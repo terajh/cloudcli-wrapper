@@ -15,7 +15,10 @@ export default function CodeEditorLoadingState({
     <>
       <style>{getEditorLoadingStyles(isDarkMode)}</style>
       {isSidebar ? (
-        <div className="flex h-full w-full items-center justify-center bg-background">
+        <div
+          className="flex h-full w-full items-center justify-center"
+          style={{ backgroundColor: 'hsl(var(--sidebar-background))' }}
+        >
           <div className="flex items-center gap-3">
             <div className="h-6 w-6 animate-spin rounded-full border-b-2 border-blue-600" />
             <span className="text-gray-900 dark:text-white">{loadingText}</span>

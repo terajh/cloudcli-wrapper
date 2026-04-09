@@ -129,11 +129,42 @@ export default function CodeEditor({
     [fontSize],
   );
 
+  // 디자인 시스템과 에디터 배경 톤을 맞춘다.
+  // 사이드바 배경(`--sidebar-background`, 컨텐츠 영역 기준 +12% lift) 을
+  // CodeMirror editor / gutter / activeLine 배경으로 그대로 쓴다.
+  // oneDark 등 내장 테마가 박아두는 dark bg 를 덮어쓰기 위해 `!important` 사용.
+  const designSystemBgExtension = useMemo(
+    () =>
+      EditorView.theme({
+        '&': {
+          backgroundColor: 'hsl(var(--sidebar-background)) !important',
+        },
+        '.cm-editor': {
+          backgroundColor: 'hsl(var(--sidebar-background)) !important',
+        },
+        '.cm-scroller': {
+          backgroundColor: 'hsl(var(--sidebar-background)) !important',
+        },
+        '.cm-gutters': {
+          backgroundColor: 'hsl(var(--sidebar-background)) !important',
+          borderRight: '1px solid hsl(var(--border))',
+        },
+        '.cm-activeLine': {
+          backgroundColor: 'hsl(var(--sidebar-background) / 0.6) !important',
+        },
+        '.cm-activeLineGutter': {
+          backgroundColor: 'hsl(var(--sidebar-background) / 0.6) !important',
+        },
+      }),
+    [],
+  );
+
   const extensions = useMemo(() => {
     const allExtensions: Extension[] = [
       ...getLanguageExtensions(file.name),
       ...toolbarPanelExtension,
       fontSizeExtension,
+      designSystemBgExtension,
     ];
 
     if (file.diffInfo && showDiff && file.diffInfo.old_string !== undefined) {
@@ -156,6 +187,7 @@ export default function CodeEditor({
 
     return allExtensions;
   }, [
+    designSystemBgExtension,
     file.diffInfo,
     file.name,
     fontSizeExtension,
@@ -202,16 +234,23 @@ export default function CodeEditor({
     : `fixed inset-0 z-[9999] md:bg-black/50 md:flex md:items-center md:justify-center md:p-4 ${isFullscreen ? 'md:p-0' : ''}`;
 
   const innerContainerClassName = isSidebar
-    ? 'bg-background flex flex-col w-full h-full'
-    : `bg-background shadow-2xl flex flex-col w-full h-full md:rounded-lg md:shadow-2xl${
+    ? 'flex flex-col w-full h-full'
+    : `shadow-2xl flex flex-col w-full h-full md:rounded-lg md:shadow-2xl${
       isFullscreen ? ' md:w-full md:h-full md:rounded-none' : ' md:w-full md:max-w-6xl md:h-[80vh] md:max-h-[80vh]'
     }`;
+
+  // 에디터 패널 배경을 디자인 시스템의 "연한" 톤(사이드바 배경, base +12% lift)
+  // 으로 맞춘다. 기존 `bg-background` 는 컨텐츠 영역 A 색으로 에디터 영역과
+  // 이질감을 유발해서 inline style 로 교체.
+  const innerContainerStyle = {
+    backgroundColor: 'hsl(var(--sidebar-background))',
+  } as const;
 
   return (
     <>
       <style>{getEditorStyles(isDarkMode)}</style>
       <div className={outerContainerClassName}>
-        <div className={innerContainerClassName}>
+        <div className={innerContainerClassName} style={innerContainerStyle}>
           <CodeEditorHeader
             file={file}
             isSidebar={isSidebar}
