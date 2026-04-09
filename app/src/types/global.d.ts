@@ -7,6 +7,7 @@ declare global {
     injectOptimisticSession?: (
       projectName: string,
       sessionMeta: { id: string; summary?: string; lastActivity?: string },
+      provider?: string,
     ) => void;
     openSettings?: (tab?: string) => void;
   }

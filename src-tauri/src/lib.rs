@@ -383,28 +383,17 @@ fn spawn_server() -> std::io::Result<Child> {
 
     // Claude Agent SDK는 spawn한 child가 CLAUDECODE/CLAUDE_CODE_* 등이 보이면
     // "nested session" 에러로 즉시 exit. 부모 셸에서 새어 들어온 모든 Claude 관련
-    // 환경변수를 명시적으로 제거해 SDK 내부 CLI가 깨끗한 환경에서 시작되도록 함.
-    let claude_env_vars = [
-        "CLAUDECODE",
-        "CLAUDE_CODE_ENTRYPOINT",
-        "CLAUDE_CODE_OAUTH_TOKEN",
-        "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST",
-        "CLAUDE_CODE_DISABLE_CRON",
-        "CLAUDE_CODE_EMIT_TOOL_USE_SUMMARIES",
-        "CLAUDE_CODE_ENABLE_ASK_USER_QUESTION_TOOL",
-        "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS",
-        "CLAUDE_AGENT_SDK_VERSION",
-        "CLAUDE_CODE_STREAM_CLOSE_TIMEOUT",
-        "ANTHROPIC_API_KEY",
-        "ANTHROPIC_AUTH_TOKEN",
-        "ANTHROPIC_BASE_URL",
-        "ANTHROPIC_DEFAULT_OPUS_MODEL",
-        "ANTHROPIC_DEFAULT_SONNET_MODEL",
-        "ANTHROPIC_MODEL",
-        "ANTHROPIC_SMALL_FAST_MODEL",
-    ];
-    for var in claude_env_vars {
-        cmd.env_remove(var);
+    // 환경변수를 접두어 기반으로 제거해 SDK 내부 CLI가 깨끗한 환경에서 시작되도록 함.
+    // 하드코딩된 리스트는 누락 위험이 있으므로(`CLAUDE_CODE_EXECPATH` 등) 접두어 매칭으로
+    // 미래에 새로 추가되는 변수에도 자동 대응.
+    for (key, _) in std::env::vars() {
+        if key == "CLAUDECODE"
+            || key.starts_with("CLAUDE_CODE_")
+            || key.starts_with("CLAUDE_AGENT_")
+            || key.starts_with("ANTHROPIC_")
+        {
+            cmd.env_remove(&key);
+        }
     }
 
     cmd.stdout(stdout_target).stderr(stderr_target).spawn()

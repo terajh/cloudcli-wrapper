@@ -1,6 +1,24 @@
 #!/usr/bin/env node
 // Load environment variables before other imports execute
 import './load-env.js';
+
+// Defense-in-depth: Claude Agent SDK child process (claude CLI)는 부모 env에
+// CLAUDECODE / CLAUDE_CODE_* / CLAUDE_AGENT_* / ANTHROPIC_* 가 있으면
+// "nested session" 으로 간주하고 exit code 1 로 즉시 종료한다.
+// Tauri 쉘(lib.rs)에서도 제거하지만, Vienna 외부에서 `node server/index.js`
+// 를 직접 실행하거나 Tauri 가 새 변수를 놓치는 경우를 대비해 서버 부팅 시점에도
+// 한 번 더 깨끗하게 지운다. 접두어 매칭으로 미래 추가 변수에도 자동 대응.
+for (const key of Object.keys(process.env)) {
+    if (
+        key === 'CLAUDECODE' ||
+        key.startsWith('CLAUDE_CODE_') ||
+        key.startsWith('CLAUDE_AGENT_') ||
+        key.startsWith('ANTHROPIC_')
+    ) {
+        delete process.env[key];
+    }
+}
+
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -46,6 +64,7 @@ import mime from 'mime-types';
 
 import { getProjects, getSessions, renameProject, deleteSession, deleteProject, addProjectManually, extractProjectDirectory, clearProjectDirectoryCache, searchConversations } from './projects.js';
 import { queryClaudeSDK, abortClaudeSDKSession, isClaudeSDKSessionActive, getActiveClaudeSDKSessions, resolveToolApproval, getPendingApprovalsForSession, reconnectSessionWriter } from './claude-sdk.js';
+import { getAvailableClaudeModels } from './claude-model-probe.js';
 import { spawnCursor, abortCursorSession, isCursorSessionActive, getActiveCursorSessions } from './cursor-cli.js';
 import { queryCodex, abortCodexSession, isCodexSessionActive, getActiveCodexSessions } from './openai-codex.js';
 import { spawnGemini, abortGeminiSession, isGeminiSessionActive, getActiveGeminiSessions } from './gemini-cli.js';
@@ -499,6 +518,20 @@ app.get('/api/projects', authenticateToken, async (req, res) => {
         const projects = await getProjects(broadcastProgress);
         res.json(projects);
     } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Returns the Claude model dropdown list filtered by whether the user's
+// account can actually use each model. Results are cached server-side for
+// 30 minutes. Pass ?force=1 to bypass the cache and re-probe.
+app.get('/api/claude/available-models', authenticateToken, async (req, res) => {
+    try {
+        const force = req.query.force === '1' || req.query.force === 'true';
+        const models = await getAvailableClaudeModels({ force });
+        res.json({ models });
+    } catch (error) {
+        console.error('Failed to probe Claude models:', error);
         res.status(500).json({ error: error.message });
     }
 });

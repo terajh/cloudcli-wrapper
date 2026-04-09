@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import SessionProviderLogo from "../../../llm-logo-provider/SessionProviderLogo";
@@ -10,6 +10,7 @@ import {
 } from "../../../../../shared/modelConstants";
 import type { ProjectSession, SessionProvider } from "../../../../types/app";
 import { NextTaskBanner } from "../../../task-master";
+import { useAvailableClaudeModels } from "../../../../hooks/useAvailableClaudeModels";
 
 type ProviderSelectionEmptyStateProps = {
   selectedSession: ProjectSession | null;
@@ -164,6 +165,33 @@ export default function ProviderSelectionEmptyState({
     geminiModel,
   );
 
+  // Claude 는 계정 권한에 따라 일부 모델(예: sonnet[1m]) 이 실제로
+  // 사용 불가할 수 있다. 서버가 probe 결과를 내려주면 그걸로 필터링.
+  const { models: availableClaudeModels } = useAvailableClaudeModels();
+  const displayedModelOptions = useMemo(() => {
+    if (provider === "claude") return availableClaudeModels;
+    return modelConfig.OPTIONS;
+  }, [provider, availableClaudeModels, modelConfig]);
+
+  // 현재 선택한 Claude 모델이 필터링 결과에 없으면 기본 모델로 자동 폴백.
+  // (이전에 localStorage 에 저장해둔 값이 지금은 사용 불가한 경우)
+  useEffect(() => {
+    if (provider !== "claude") return;
+    if (availableClaudeModels.length === 0) return;
+    const stillAvailable = availableClaudeModels.some(
+      (option) => option.value === claudeModel,
+    );
+    if (stillAvailable) return;
+
+    const fallback =
+      availableClaudeModels.find((option) => option.value === CLAUDE_MODELS.DEFAULT) ??
+      availableClaudeModels[0];
+    if (fallback) {
+      setClaudeModel(fallback.value);
+      localStorage.setItem("claude-model", fallback.value);
+    }
+  }, [provider, availableClaudeModels, claudeModel, setClaudeModel]);
+
   /* ── New session — provider picker ── */
   if (!selectedSession && !currentSessionId) {
     return (
@@ -237,7 +265,7 @@ export default function ProviderSelectionEmptyState({
                   onClick={() => setIsModelDropdownOpen((prev) => !prev)}
                   className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-border/60 bg-muted/50 py-1.5 pl-3 pr-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted focus:outline-none"
                 >
-                  <span>{modelConfig.OPTIONS.find((o: { value: string; label: string }) => o.value === currentModel)?.label ?? currentModel}</span>
+                  <span>{displayedModelOptions.find((o: { value: string; label: string }) => o.value === currentModel)?.label ?? currentModel}</span>
                   <ChevronDown
                     className={`h-3.5 w-3.5 text-muted-foreground transition-transform duration-150 ${isModelDropdownOpen ? 'rotate-180' : ''}`}
                   />
@@ -245,7 +273,7 @@ export default function ProviderSelectionEmptyState({
 
                 {isModelDropdownOpen && (
                   <div className="absolute left-1/2 top-full z-50 mt-1.5 min-w-[160px] -translate-x-1/2 overflow-hidden rounded-xl border border-border/60 bg-card shadow-xl">
-                    {modelConfig.OPTIONS.map(({ value, label }: { value: string; label: string }) => {
+                    {displayedModelOptions.map(({ value, label }: { value: string; label: string }) => {
                       const isActive = value === currentModel;
                       return (
                         <button

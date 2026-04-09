@@ -295,7 +295,7 @@ export function useChatRealtimeHandlers({
                 id: newSessionId,
                 summary: summary || undefined,
                 lastActivity: new Date().toISOString(),
-              });
+              }, provider);
             }
           } catch (error) {
             console.error('[ChatRealtime] injectOptimisticSession failed:', error);

@@ -193,7 +193,7 @@ function mapCliOptionsToSDK(options = {}) {
   sdkOptions.disallowedTools = settings.disallowedTools || [];
 
   // Map model (default to sonnet)
-  // Valid models: sonnet, opus, haiku, opusplan, sonnet[1m]
+  // Valid models: sonnet, sonnet[1m], opus, opus[1m], haiku, opusplan
   sdkOptions.model = options.model || CLAUDE_MODELS.DEFAULT;
   // Model logged at query start below
 
@@ -499,6 +499,10 @@ async function queryClaudeSDK(command, options = {}, ws) {
     });
   };
 
+  // Declared outside `try` so the `catch` block can read it and forward the
+  // SDK child process stderr to the UI (the SDK otherwise swallows it).
+  let capturedStderr = '';
+
   try {
     // Map CLI options to SDK format
     const sdkOptions = mapCliOptionsToSDK(options);
@@ -605,6 +609,15 @@ async function queryClaudeSDK(command, options = {}, ws) {
       }
 
       return { behavior: 'deny', message: decision.message ?? 'User denied tool use' };
+    };
+
+    // Capture stderr from the SDK's spawned claude CLI subprocess so we can surface
+    // real error messages (e.g. "Extra usage is required for 1M context") to the UI.
+    // The SDK swallows stderr by default (stdio: ['pipe','pipe','ignore']) which
+    // makes errors invisible — Vienna stays stuck on "Receiving" with no feedback.
+    // `capturedStderr` is declared outside the try block so catch can read it.
+    sdkOptions.stderr = (chunk) => {
+      capturedStderr += chunk;
     };
 
     // Set stream-close timeout for interactive tools (Query constructor reads it synchronously). Claude Agent SDK has a default of 5s and this overrides it
@@ -756,7 +769,19 @@ async function queryClaudeSDK(command, options = {}, ws) {
     // Complete
 
   } catch (error) {
+    // Build a user-facing error message. The SDK only reports a generic "Claude Code
+    // process exited with code N" for child process failures — the real reason
+    // (API errors, invalid model, missing access, etc.) is on stderr which we
+    // captured via sdkOptions.stderr above. Surface it to the UI when present.
+    const trimmedStderr = (capturedStderr || '').trim();
+    const enrichedMessage = trimmedStderr
+      ? `${error.message}\n\n${trimmedStderr}`
+      : error.message;
+
     console.error('SDK query error:', error);
+    if (trimmedStderr) {
+      console.error('SDK child stderr:', trimmedStderr);
+    }
 
     // Clean up session on error
     if (capturedSessionId) {
@@ -766,8 +791,8 @@ async function queryClaudeSDK(command, options = {}, ws) {
     // Clean up temporary image files on error
     await cleanupTempFiles(tempImagePaths, tempDir);
 
-    // Send error to WebSocket
-    ws.send(createNormalizedMessage({ kind: 'error', content: error.message, sessionId: capturedSessionId || sessionId || null, provider: 'claude' }));
+    // Send error to WebSocket (with stderr context so the user can see WHY)
+    ws.send(createNormalizedMessage({ kind: 'error', content: enrichedMessage, sessionId: capturedSessionId || sessionId || null, provider: 'claude' }));
     notifyRunFailed({
       userId: ws?.userId || null,
       provider: 'claude',

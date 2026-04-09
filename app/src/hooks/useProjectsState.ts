@@ -239,6 +239,7 @@ export function useProjectsState({
     (
       projectName: string,
       sessionMeta: { id: string; summary?: string; lastActivity?: string },
+      provider?: string,
     ) => {
       if (!projectName || !sessionMeta?.id) return;
       const sessionId = sessionMeta.id;
@@ -263,7 +264,7 @@ export function useProjectsState({
           lastActivity: now,
           created_at: now,
           updated_at: now,
-          __provider: 'claude',
+          __provider: (provider ?? 'claude') as ProjectSession['__provider'],
           __optimistic: true,
         };
 
