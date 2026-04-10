@@ -227,20 +227,32 @@ export async function queryCodex(command, options = {}, ws) {
       thread = codex.startThread(threadOptions);
     }
 
-    // Get the thread ID
-    currentSessionId = thread.id || sessionId || `codex-${Date.now()}`;
-
-    // Track the session
-    activeCodexSessions.set(currentSessionId, {
-      thread,
-      codex,
-      status: 'running',
-      abortController,
-      startedAt: new Date().toISOString()
-    });
-
-    // Send session created event
-    sendMessage(ws, createNormalizedMessage({ kind: 'session_created', newSessionId: currentSessionId, sessionId: currentSessionId, provider: 'codex' }));
+    // Resumed threads already know their id. Brand-new threads do NOT —
+    // per the SDK docs (`/** Populated after the first turn starts. */`),
+    // `thread.id` is `null` at this point for a new thread. Using a
+    // `codex-${Date.now()}` placeholder here and broadcasting it via
+    // `session_created` was the source of the "duplicate codex session"
+    // sidebar bug: the frontend pinned its optimistic row to the
+    // placeholder id, but chokidar later indexed the real jsonl under
+    // the actual thread id → the two rows never converged.
+    //
+    // Instead, defer `session_created` until we actually know the real
+    // id. For resumed threads we can emit immediately. For new threads
+    // we wait for the first event inside `runStreamed` (a
+    // `thread.started` event carrying `thread_id`) and only THEN emit
+    // `session_created` with the authoritative id.
+    const isResumed = Boolean(sessionId);
+    if (isResumed) {
+      currentSessionId = thread.id || sessionId;
+      activeCodexSessions.set(currentSessionId, {
+        thread,
+        codex,
+        status: 'running',
+        abortController,
+        startedAt: new Date().toISOString()
+      });
+      sendMessage(ws, createNormalizedMessage({ kind: 'session_created', newSessionId: currentSessionId, sessionId: currentSessionId, provider: 'codex' }));
+    }
 
     // Execute with streaming
     const streamedTurn = await thread.runStreamed(command, {
@@ -248,9 +260,26 @@ export async function queryCodex(command, options = {}, ws) {
     });
 
     for await (const event of streamedTurn.events) {
+      // For brand-new threads, the very first event is `thread.started`
+      // carrying the real `thread_id`. Capture it, register the session
+      // under the real id, and emit `session_created` here so the
+      // frontend's optimistic row promotes directly to the authoritative
+      // id that chokidar will later index.
+      if (!currentSessionId && event.type === 'thread.started' && event.thread_id) {
+        currentSessionId = event.thread_id;
+        activeCodexSessions.set(currentSessionId, {
+          thread,
+          codex,
+          status: 'running',
+          abortController,
+          startedAt: new Date().toISOString()
+        });
+        sendMessage(ws, createNormalizedMessage({ kind: 'session_created', newSessionId: currentSessionId, sessionId: currentSessionId, provider: 'codex' }));
+      }
+
       // Check if session was aborted
-      const session = activeCodexSessions.get(currentSessionId);
-      if (!session || session.status === 'aborted') {
+      const session = currentSessionId ? activeCodexSessions.get(currentSessionId) : null;
+      if (currentSessionId && (!session || session.status === 'aborted')) {
         break;
       }
 
@@ -293,6 +322,23 @@ export async function queryCodex(command, options = {}, ws) {
       console.error('[Codex]', msg);
       terminalFailure = new Error(msg);
       sendMessage(ws, createNormalizedMessage({ kind: 'error', content: msg, sessionId: currentSessionId, provider: 'codex' }));
+    }
+
+    // Safety net: if the stream produced events but somehow never emitted a
+    // `thread.started` (shouldn't happen with current codex-sdk, but the
+    // SDK's ordering is not formally guaranteed), derive the id from
+    // `thread.id` which is populated once the first turn starts. Without
+    // this the `complete` event below would sail out with sessionId=null.
+    if (!currentSessionId && thread.id) {
+      currentSessionId = thread.id;
+      activeCodexSessions.set(currentSessionId, {
+        thread,
+        codex,
+        status: 'running',
+        abortController,
+        startedAt: new Date().toISOString()
+      });
+      sendMessage(ws, createNormalizedMessage({ kind: 'session_created', newSessionId: currentSessionId, sessionId: currentSessionId, provider: 'codex' }));
     }
 
     // Send completion event

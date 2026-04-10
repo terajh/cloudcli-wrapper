@@ -89,6 +89,8 @@ export default function AppContent() {
     openSettings,
     refreshProjectsSilently,
     injectOptimisticSession,
+    promoteOptimisticSession,
+    sweepStaleOptimisticTempIds,
     sidebarSharedProps,
   } = useProjectsState({
     sessionId,
@@ -118,6 +120,24 @@ export default function AppContent() {
       }
     };
   }, [injectOptimisticSession]);
+
+  useEffect(() => {
+    window.promoteOptimisticSession = promoteOptimisticSession;
+    return () => {
+      if (window.promoteOptimisticSession === promoteOptimisticSession) {
+        delete window.promoteOptimisticSession;
+      }
+    };
+  }, [promoteOptimisticSession]);
+
+  useEffect(() => {
+    window.sweepStaleOptimisticTempIds = sweepStaleOptimisticTempIds;
+    return () => {
+      if (window.sweepStaleOptimisticTempIds === sweepStaleOptimisticTempIds) {
+        delete window.sweepStaleOptimisticTempIds;
+      }
+    };
+  }, [sweepStaleOptimisticTempIds]);
 
   useEffect(() => {
     window.openSettings = openSettings;

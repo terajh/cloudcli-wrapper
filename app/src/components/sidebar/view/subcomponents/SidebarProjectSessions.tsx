@@ -8,8 +8,10 @@ import SidebarSessionItem from './SidebarSessionItem';
 
 // 데스크톱 사이드바에서 한 프로젝트당 기본으로 노출할 세션 수.
 // 이 수를 넘어가면 "더보기" 토글이 나타나고, 펼치면 전체가 한 번에 보이며
-// 스크롤 없이 그대로 흘러내린다.
-const DESKTOP_DEFAULT_VISIBLE_SESSIONS = 10;
+// 스크롤 없이 그대로 흘러내린다. 10 이었다가 실사용에서 몇 개만 있어도
+// 리스트가 길게 늘어지고 더보기 토글이 너무 늦게 나타나 답답하다는 피드백을
+// 받고 5로 낮췄다.
+const DESKTOP_DEFAULT_VISIBLE_SESSIONS = 5;
 
 type SidebarProjectSessionsProps = {
   project: Project;
@@ -147,17 +149,17 @@ export default function SidebarProjectSessions({
               {hasOverflow && (
                 <button
                   type="button"
-                  className="hidden md:flex mt-0.5 w-full items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground/70 transition-colors hover:bg-accent/30 hover:text-foreground/80"
+                  className="hidden md:flex mt-1 w-full items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground"
                   onClick={() => setShowAllSessions((prev) => !prev)}
                 >
                   {showAllSessions ? (
                     <>
-                      <ChevronUp className="h-3 w-3" />
+                      <ChevronUp className="h-3.5 w-3.5" />
                       <span>{t('sessions.collapse', { defaultValue: '접기' })}</span>
                     </>
                   ) : (
                     <>
-                      <ChevronDown className="h-3 w-3" />
+                      <ChevronDown className="h-3.5 w-3.5" />
                       <span>
                         {t('sessions.showMore', {
                           defaultValue: `더보기 (${hiddenSessionCount}개)`,

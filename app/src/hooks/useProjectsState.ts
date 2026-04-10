@@ -9,6 +9,18 @@ import type {
   ProjectSession,
   ProjectsUpdatedMessage,
 } from '../types/app';
+import {
+  applyPromotions,
+  buildOptimisticEntry,
+  findCleanupIds,
+  findProactivePromotions,
+  isPlaceholderSummary,
+  mergeOptimisticSessions,
+  sweepTempIdsForProject,
+  type BucketKey,
+  type OptimisticEntry,
+  type OptimisticSessionMap,
+} from './optimisticSessions';
 
 type UseProjectsStateArgs = {
   sessionId?: string;
@@ -76,11 +88,6 @@ const isOptimisticSession = (session: ProjectSession | undefined): boolean => {
   return Boolean(session && (session as Record<string, unknown>).__optimistic === true);
 };
 
-const projectHasOptimisticSessions = (project: Project | undefined): boolean => {
-  if (!project) return false;
-  return getProjectSessions(project).some(isOptimisticSession);
-};
-
 const isUpdateAdditive = (
   currentProjects: Project[],
   updatedProjects: Project[],
@@ -130,39 +137,12 @@ const isUpdateAdditive = (
  * match a session id that was optimistically inserted but is now arriving
  * as real data. This is a no-op for projects without optimistic sessions.
  */
-const reconcileOptimisticSessions = (
-  currentProjects: Project[],
-  updatedProjects: Project[],
-): Project[] => {
-  if (!currentProjects.some(projectHasOptimisticSessions)) {
-    return updatedProjects;
-  }
-  const optimisticIds = new Set<string>();
-  for (const project of currentProjects) {
-    for (const session of getProjectSessions(project)) {
-      if (isOptimisticSession(session)) {
-        optimisticIds.add(session.id);
-      }
-    }
-  }
-  if (optimisticIds.size === 0) return updatedProjects;
-
-  const stripMarker = (sessions?: ProjectSession[]) =>
-    sessions?.map((session) => {
-      if (!optimisticIds.has(session.id)) return session;
-      const next = { ...session } as ProjectSession & { __optimistic?: boolean };
-      delete next.__optimistic;
-      return next;
-    });
-
-  return updatedProjects.map((project) => ({
-    ...project,
-    sessions: stripMarker(project.sessions) ?? project.sessions,
-    cursorSessions: stripMarker(project.cursorSessions) ?? project.cursorSessions,
-    codexSessions: stripMarker(project.codexSessions) ?? project.codexSessions,
-    geminiSessions: stripMarker(project.geminiSessions) ?? project.geminiSessions,
-  }));
-};
+/**
+ * How long an optimistic sidebar row survives without backend acknowledgement
+ * before the fallback cleanup timer removes it. See the comment next to the
+ * `optimisticCleanupTimersRef` usage for the full rationale.
+ */
+const OPTIMISTIC_FALLBACK_TTL_MS = 60_000;
 
 const VALID_TABS: Set<string> = new Set(['chat', 'files', 'shell', 'git', 'tasks', 'preview']);
 
@@ -189,7 +169,137 @@ export function useProjectsState({
   isMobile,
   activeSessions,
 }: UseProjectsStateArgs) {
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectsRaw, setProjectsRaw] = useState<Project[]>([]);
+  /**
+   * Side-car state for optimistic sidebar rows.
+   *
+   * These rows live entirely *outside* of `projectsRaw`. Every consumer of
+   * the hook sees them through the `projects` useMemo below, which merges
+   * them in on top of the server payload. This makes the optimistic row
+   * impossible to accidentally wipe from any `setProjectsRaw` call — WS
+   * broadcasts, REST polls, sidebar refreshes, delete strips, none of
+   * them touch this map. The row simply *coexists* with raw projects data
+   * until either the backend acknowledges the id (the merge de-dupes and
+   * the cleanup effect removes the side-car entry) or the fallback timer
+   * fires (explicit removal).
+   */
+  const [optimisticSessions, setOptimisticSessions] = useState<OptimisticSessionMap>({});
+
+  const projects = useMemo<Project[]>(
+    () => mergeOptimisticSessions(projectsRaw, optimisticSessions),
+    [projectsRaw, optimisticSessions],
+  );
+
+  /**
+   * Proactive promotion: when `projects_updated` arrives with a brand-new
+   * session row in the same project + bucket as a side-car entry whose id
+   * the server does NOT yet know, eagerly rename the side-car entry to
+   * the server's id. This handles two situations:
+   *
+   * 1. **Pre-`session_created` race.** The side-car still holds the
+   *    original `new-session-*` tempId from the composer, and
+   *    `projects_updated` arrived before the provider backend emitted
+   *    `session_created`. We promote the tempId to the server row's id
+   *    so the merge dedupes.
+   *
+   * 2. **`session_created` lied about the id.** The provider backend
+   *    (historically codex, which read `thread.id` before any turn had
+   *    started and fell back to `codex-${Date.now()}`) pinned the
+   *    side-car to a fake id. Chokidar later indexed the real session
+   *    file under a completely different id and the two rows never
+   *    converged — permanent duplicate. The extended match below ALSO
+   *    applies to non-tempId optimistic entries, so even post-promote
+   *    we can heal the id drift when a placeholder row materialises in
+   *    the correct bucket.
+   *
+   * Match rule: for each optimistic side-car entry whose id is NOT in
+   * projectsRaw, find server rows in the target project + bucket that
+   * look "brand new" (summary empty or matching a backend placeholder
+   * like 'New Session'/'Codex Session'). If exactly one such candidate
+   * exists and its id isn't already tracked by the side-car, promote
+   * the entry to that id. The overlay logic in the merge will then
+   * paint the user-provided summary onto the server row and the
+   * duplicate never appears.
+   */
+  useEffect(() => {
+    const promotions = findProactivePromotions(projectsRaw, optimisticSessions);
+    if (promotions.length === 0) return;
+
+    setOptimisticSessions((prev) => applyPromotions(prev, promotions));
+
+    // Hand fallback cleanup timers from tempIds over to their new ids.
+    for (const { tempId } of promotions) {
+      const oldTimer = optimisticCleanupTimersRef.current.get(tempId);
+      if (oldTimer) {
+        clearTimeout(oldTimer);
+        optimisticCleanupTimersRef.current.delete(tempId);
+      }
+    }
+
+    // If any promotion matches the currently selected session, move its
+    // id with it so the sidebar highlight follows.
+    setSelectedSession((prev) => {
+      if (!prev) return prev;
+      const match = promotions.find((p) => p.tempId === prev.id);
+      if (!match) return prev;
+      return { ...prev, id: match.realId };
+    });
+  }, [projectsRaw, optimisticSessions]);
+
+  /**
+   * Smart auto-cleanup for side-car entries.
+   *
+   * The side-car exists as a safety net for the window between "user
+   * submitted a new chat" and "backend has indexed the real session file
+   * with a real summary". Once the backend has the row AND has parsed a
+   * real (non-placeholder) summary, the side-car entry is no longer
+   * needed — the merge would skip it anyway — and holding it forever
+   * causes two real problems:
+   *
+   * 1. **Accumulation across submissions.** Every new-session submit
+   *    added an entry; with no cleanup they piled up indefinitely. Once
+   *    the backend's id diverged from the side-car id (happens whenever
+   *    `session_created` payload's id doesn't match what the file
+   *    watcher later indexes), the stale entry stayed visible forever
+   *    — exactly the "두 개의 '안녕' 세션" symptom.
+   *
+   * 2. **Stale entries across hot reloads.** Same root cause, just
+   *    amplified by the dev loop.
+   *
+   * Cleanup rule: a side-car entry is removed iff
+   *   - projectsRaw has the same id under its owning project, AND
+   *   - the server row's summary is a real string (not empty, not one
+   *     of the backend placeholders like 'New Session' / 'Codex Session').
+   *
+   * As long as the server row is still in a placeholder state we keep
+   * the side-car alive so the overlay can paint the user text and so
+   * any transient "row disappeared" payload still has a fallback.
+   */
+  useEffect(() => {
+    const toRemove = findCleanupIds(projectsRaw, optimisticSessions);
+    if (toRemove.length === 0) return;
+
+    setOptimisticSessions((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const id of toRemove) {
+        if (id in next) {
+          delete next[id];
+          changed = true;
+          const t = optimisticCleanupTimersRef.current.get(id);
+          if (t) {
+            clearTimeout(t);
+            optimisticCleanupTimersRef.current.delete(id);
+          }
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [projectsRaw, optimisticSessions]);
+
+  // Backwards-compatible setProjects name for the rest of this file.
+  const setProjects = setProjectsRaw;
+
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [selectedSession, setSelectedSession] = useState<ProjectSession | null>(null);
   const [activeTab, setActiveTab] = useState<AppTab>(readPersistedTab);
@@ -229,11 +339,16 @@ export function useProjectsState({
   /**
    * Insert a temporary session row into the sidebar immediately, so the user
    * sees their new chat without waiting for the backend JSONL refresh.
-   * The real `projects_updated` payload eventually replaces this with the
-   * authoritative record (reconcileOptimisticSessions strips the marker).
    *
-   * A 5s fallback timer removes the stub if the real update never arrives,
-   * so the sidebar never gets permanently dirty.
+   * The row is stored in the `optimisticSessions` side-car (NOT in
+   * `projectsRaw`), which means no subsequent `setProjectsRaw` call — WS
+   * broadcasts, REST polls, delete strips, whatever — can wipe it out. The
+   * merged `projects` useMemo re-adds it on every render until either:
+   *   - the backend acknowledges the id in `projectsRaw` (cleanup effect
+   *     removes the side-car entry and the row transitions to authoritative
+   *     server data in place), or
+   *   - the OPTIMISTIC_FALLBACK_TTL_MS fallback timer fires (explicit
+   *     removal so the row never gets permanently dirty).
    */
   const injectOptimisticSession = useCallback(
     (
@@ -244,45 +359,11 @@ export function useProjectsState({
       if (!projectName || !sessionMeta?.id) return;
       const sessionId = sessionMeta.id;
 
-      setProjects((prevProjects) => {
-        const targetIndex = prevProjects.findIndex((project) => project.name === projectName);
-        if (targetIndex === -1) return prevProjects;
+      const entry = buildOptimisticEntry(projectName, sessionMeta, provider);
 
-        const targetProject = prevProjects[targetIndex];
-        const existingSessions = targetProject.sessions ?? [];
-
-        // Don't double-insert if the session is already listed (real or optimistic).
-        if (existingSessions.some((session) => session.id === sessionId)) {
-          return prevProjects;
-        }
-
-        const now = sessionMeta.lastActivity || new Date().toISOString();
-        const optimisticSession: ProjectSession = {
-          id: sessionId,
-          summary: sessionMeta.summary,
-          title: sessionMeta.summary,
-          lastActivity: now,
-          created_at: now,
-          updated_at: now,
-          __provider: (provider ?? 'claude') as ProjectSession['__provider'],
-          __optimistic: true,
-        };
-
-        const nextProject: Project = {
-          ...targetProject,
-          sessions: [optimisticSession, ...existingSessions],
-          sessionMeta: {
-            ...targetProject.sessionMeta,
-            total:
-              typeof targetProject.sessionMeta?.total === 'number'
-                ? (targetProject.sessionMeta.total as number) + 1
-                : undefined,
-          },
-        };
-
-        const nextProjects = [...prevProjects];
-        nextProjects[targetIndex] = nextProject;
-        return nextProjects;
+      setOptimisticSessions((prev) => {
+        if (prev[sessionId]) return prev;
+        return { ...prev, [sessionId]: entry };
       });
 
       // Clear any previous fallback timer for this id and arm a new one.
@@ -292,25 +373,101 @@ export function useProjectsState({
       }
       const timer = setTimeout(() => {
         optimisticCleanupTimersRef.current.delete(sessionId);
-        setProjects((prevProjects) => {
-          let changed = false;
-          const nextProjects = prevProjects.map((project) => {
-            if (project.name !== projectName) return project;
-            const sessions = project.sessions ?? [];
-            const filtered = sessions.filter(
-              (session) => !(session.id === sessionId && isOptimisticSession(session)),
-            );
-            if (filtered.length === sessions.length) return project;
-            changed = true;
-            return { ...project, sessions: filtered };
-          });
-          return changed ? nextProjects : prevProjects;
+        setOptimisticSessions((prev) => {
+          if (!(sessionId in prev)) return prev;
+          const next = { ...prev };
+          delete next[sessionId];
+          return next;
         });
-      }, 5000);
+      }, OPTIMISTIC_FALLBACK_TTL_MS);
       optimisticCleanupTimersRef.current.set(sessionId, timer);
     },
     [],
   );
+
+  /**
+   * Rename an optimistic session's id from `tempId` to `realId` inside the
+   * side-car. Called when `session_created` delivers the authoritative id,
+   * so the sidebar row can stay in place while its identity swaps under
+   * the hood. Also moves the fallback cleanup timer from tempId → realId so
+   * the safety net still fires against the new id in the (rare) case the
+   * backend never broadcasts a `projects_updated`.
+   *
+   * Returns true if a matching side-car entry was found and renamed.
+   */
+  const promoteOptimisticSession = useCallback(
+    (tempId: string, realId: string): boolean => {
+      if (!tempId || !realId || tempId === realId) return false;
+
+      let promoted = false;
+      setOptimisticSessions((prev) => {
+        const entry = prev[tempId];
+        if (!entry) return prev;
+        const next = { ...prev };
+        delete next[tempId];
+        next[realId] = {
+          ...entry,
+          session: { ...entry.session, id: realId },
+        };
+        promoted = true;
+        return next;
+      });
+
+      // If the selected session was pointing at the temp id, move the
+      // selection to the real id in place so the sidebar highlight follows
+      // the promoted row without a flicker.
+      setSelectedSession((prev) => {
+        if (!prev || prev.id !== tempId) return prev;
+        return { ...prev, id: realId };
+      });
+
+      // Cancel the fallback cleanup timer — `session_created` firing means
+      // the backend has confirmed the session is real, so we no longer need
+      // the "this submission never reached the server" safety net. From
+      // here on the side-car entry is sticky for the session's lifetime,
+      // giving the merge a permanent fallback to paint the row even if
+      // the backend's projects payload temporarily drops it (parse races,
+      // mid-write reads, etc).
+      const tempTimer = optimisticCleanupTimersRef.current.get(tempId);
+      if (tempTimer) {
+        clearTimeout(tempTimer);
+        optimisticCleanupTimersRef.current.delete(tempId);
+      }
+
+      return promoted;
+    },
+    [],
+  );
+
+  /**
+   * Sweep any leftover `new-session-*` optimistic entries from the side-car.
+   *
+   * Called after `session_created` as a belt-and-suspenders cleanup. Under
+   * normal conditions `promoteOptimisticSession(tempId, realId)` atomically
+   * removes the exact temp id, but if for any reason the exact temp id
+   * can't be matched (e.g. the composer's `pendingViewSessionRef.tempId`
+   * differs from what's actually in the side-car, or a stale tempId from
+   * a previous submission is lingering), this sweep prevents the merge
+   * from rendering the tempId row alongside the new real row — which
+   * was the source of the "two identical sessions in sidebar" bug.
+   *
+   * Scoped by projectName so we never touch another project's in-flight
+   * optimistic rows.
+   */
+  const sweepStaleOptimisticTempIds = useCallback((projectName: string) => {
+    if (!projectName) return;
+    setOptimisticSessions((prev) => {
+      const { next, removed } = sweepTempIdsForProject(prev, projectName);
+      for (const id of removed) {
+        const t = optimisticCleanupTimersRef.current.get(id);
+        if (t) {
+          clearTimeout(t);
+          optimisticCleanupTimersRef.current.delete(id);
+        }
+      }
+      return next;
+    });
+  }, []);
 
   const fetchProjects = useCallback(async ({ showLoadingState = true }: FetchProjectsOptions = {}) => {
     try {
@@ -463,25 +620,11 @@ export function useProjectsState({
       }
     }
 
-    // Strip the `__optimistic` marker for any ids the server now knows about,
-    // and cancel any pending fallback timers so we don't delete the real row
-    // from under ourselves.
-    const updatedProjects = reconcileOptimisticSessions(projects, projectsAfterDeleteStrip);
-
-    if (optimisticCleanupTimersRef.current.size > 0) {
-      const knownServerIds = new Set<string>();
-      for (const project of rawUpdatedProjects) {
-        for (const session of getProjectSessions(project)) {
-          knownServerIds.add(session.id);
-        }
-      }
-      for (const [sessionId, timer] of optimisticCleanupTimersRef.current) {
-        if (knownServerIds.has(sessionId)) {
-          clearTimeout(timer);
-          optimisticCleanupTimersRef.current.delete(sessionId);
-        }
-      }
-    }
+    // Side-car optimistic rows are preserved automatically by the `projects`
+    // useMemo merge — `projectsRaw` can be freely replaced here without
+    // wiping them. A separate cleanup effect watches `projectsRaw` and drops
+    // side-car entries the moment the server acknowledges them.
+    const updatedProjects = projectsAfterDeleteStrip;
 
     if (
       hasActiveSession &&
@@ -618,6 +761,19 @@ export function useProjectsState({
 
   const handleSessionSelect = useCallback(
     (session: ProjectSession) => {
+      // Temp optimistic rows (id prefixed with `new-session-`) are not yet
+      // resolvable on the backend. Clicking such a row should drop the user
+      // back to the new-session landing ('/'), not navigate into a 404-ish
+      // `/session/new-session-…` route.
+      if (session.id && session.id.startsWith('new-session-')) {
+        setSelectedSession(null);
+        navigate('/');
+        if (isMobile) {
+          setSidebarOpen(false);
+        }
+        return;
+      }
+
       setSelectedSession(session);
 
       // 사이드바에서 세션을 선택하면 — 어떤 탭(files / shell / git / tasks /
@@ -652,6 +808,31 @@ export function useProjectsState({
       setSelectedProject(project);
       setSelectedSession(null);
       setActiveTab('chat');
+
+      // Clear stale sessionStorage keys that can otherwise leak the
+      // previous session's id into the composer's submission path. The
+      // composer's `effectiveSessionId` fallback chain is:
+      //
+      //   currentSessionId
+      //     || selectedSession?.id
+      //     || sessionStorage.getItem('cursorSessionId')
+      //
+      // If we leave `cursorSessionId` or `pendingSessionId` set after the
+      // user clicks "새 스레드", the next submission picks the wrong id,
+      // skips the optimistic-inject branch, and effectively sends the
+      // new message into the previous session context — which looked to
+      // the user like the + button doing nothing.
+      if (typeof window !== 'undefined') {
+        try {
+          sessionStorage.removeItem('pendingSessionId');
+          sessionStorage.removeItem('cursorSessionId');
+        } catch {
+          // ignore storage errors
+        }
+      }
+
+      // Navigate last so the URL change and all the synchronous state
+      // updates above land in the same React commit.
       navigate('/');
 
       if (isMobile) {
@@ -699,6 +880,20 @@ export function useProjectsState({
           },
         })),
       );
+
+      // Also drop any side-car optimistic entry keyed by this session id,
+      // so the deleted session can't reappear via the merge overlay.
+      setOptimisticSessions((prev) => {
+        if (!(sessionIdToDelete in prev)) return prev;
+        const next = { ...prev };
+        delete next[sessionIdToDelete];
+        return next;
+      });
+      const pendingTimer = optimisticCleanupTimersRef.current.get(sessionIdToDelete);
+      if (pendingTimer) {
+        clearTimeout(pendingTimer);
+        optimisticCleanupTimersRef.current.delete(sessionIdToDelete);
+      }
     },
     [navigate, selectedSession?.id],
   );
@@ -819,6 +1014,8 @@ export function useProjectsState({
     fetchProjects,
     refreshProjectsSilently,
     injectOptimisticSession,
+    promoteOptimisticSession,
+    sweepStaleOptimisticTempIds,
     sidebarSharedProps,
     handleProjectSelect,
     handleSessionSelect,

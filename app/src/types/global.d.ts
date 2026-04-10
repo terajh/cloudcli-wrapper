@@ -9,6 +9,8 @@ declare global {
       sessionMeta: { id: string; summary?: string; lastActivity?: string },
       provider?: string,
     ) => void;
+    promoteOptimisticSession?: (tempId: string, realId: string) => boolean;
+    sweepStaleOptimisticTempIds?: (projectName: string) => void;
     openSettings?: (tab?: string) => void;
   }
 

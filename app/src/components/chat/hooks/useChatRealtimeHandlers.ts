@@ -279,11 +279,40 @@ export function useChatRealtimeHandlers({
             prev.map((r) => (r.sessionId ? r : { ...r, sessionId: newSessionId })),
           );
 
-          // Optimistic sidebar: surface the new session row before the
-          // backend's `projects_updated` arrives. `reconcileOptimisticSessions`
-          // will strip the `__optimistic` marker when the real row lands.
+          // Optimistic sidebar: the composer already injected a row with the
+          // temp id at submit time so the user saw their chat immediately.
+          // Here we rename that row's id to the real one in place — no
+          // remove/re-insert, so the sidebar never flickers.
+          //
+          // The belt-and-suspenders `sweepStaleOptimisticTempIds` call runs
+          // regardless of whether promote matched the exact temp id: it
+          // removes any leftover `new-session-*` entries under the current
+          // project so we can never end up with BOTH a temp row AND the
+          // promoted/inserted real row in the sidebar at the same time
+          // (the "duplicate session in sidebar" bug).
+          //
+          // Fallback inject (when promote found no matching entry) is
+          // intentionally scoped to the case where we have a project name
+          // — otherwise we trust the backend's `projects_updated` to paint
+          // the row authoritatively within a moment.
           try {
-            if (selectedProject?.name && typeof window !== 'undefined' && window.injectOptimisticSession) {
+            const tempIdToPromote =
+              (currentSessionId && currentSessionId.startsWith('new-session-')
+                ? currentSessionId
+                : pendingViewSessionRef.current?.tempId) || null;
+
+            const promoted = Boolean(
+              tempIdToPromote &&
+                typeof window !== 'undefined' &&
+                window.promoteOptimisticSession &&
+                window.promoteOptimisticSession(tempIdToPromote, newSessionId),
+            );
+
+            if (selectedProject?.name && typeof window !== 'undefined' && window.sweepStaleOptimisticTempIds) {
+              window.sweepStaleOptimisticTempIds(selectedProject.name);
+            }
+
+            if (!promoted && selectedProject?.name && typeof window !== 'undefined' && window.injectOptimisticSession) {
               const slot = sessionStore.getSessionSlot(newSessionId);
               const lastUserText = slot?.realtimeMessages
                 .filter((m) => m.kind === 'text' && m.role === 'user' && typeof m.content === 'string')
@@ -298,10 +327,19 @@ export function useChatRealtimeHandlers({
               }, provider);
             }
           } catch (error) {
-            console.error('[ChatRealtime] injectOptimisticSession failed:', error);
+            console.error('[ChatRealtime] optimistic session sync failed:', error);
           }
+
+          // Only navigate to the new session when the user is actually waiting
+          // on this chat (i.e. we had no currentSessionId, or we were viewing
+          // a `new-session-*` placeholder that this event is promoting). When
+          // multiple sessions run in parallel and the user is looking at one
+          // of them, a session_created event for a sibling session MUST NOT
+          // rip the UI over to that sibling — the old unconditional call made
+          // any concurrent response steal focus away from whatever the user
+          // was reading.
+          onNavigateToSession?.(newSessionId);
         }
-        onNavigateToSession?.(newSessionId);
         break;
       }
 

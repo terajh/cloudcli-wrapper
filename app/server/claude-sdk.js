@@ -192,6 +192,16 @@ function mapCliOptionsToSDK(options = {}) {
 
   sdkOptions.disallowedTools = settings.disallowedTools || [];
 
+  // Pin the Node executable used to run the SDK's bundled cli.js to the SAME
+  // Node binary currently running this server. Without this, the SDK falls back
+  // to `getDefaultExecutable()` which returns the bare string "node" — resolved
+  // via PATH at spawn time. Vienna's login_path can put an older Node (e.g. v16)
+  // first, and v16 does not expose `ReadableStream` globally. cli.js then throws
+  // `ReferenceError: ReadableStream is not defined`, exits with code 1, and the
+  // UI stays stuck on "Receiving" forever. Passing `executable: process.execPath`
+  // guarantees the child runs on the same Node (v20+) that loaded @anthropic-ai/claude-agent-sdk.
+  sdkOptions.executable = process.execPath;
+
   // Map model (default to sonnet)
   // Valid models: sonnet, sonnet[1m], opus, opus[1m], haiku, opusplan
   sdkOptions.model = options.model || CLAUDE_MODELS.DEFAULT;

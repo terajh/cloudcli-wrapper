@@ -593,6 +593,30 @@ export function useChatComposerState({
           tempId: sessionToActivate,
         };
         sessionLifecyclePhaseRef.current = 'awaiting_session_id';
+
+        // Optimistic sidebar row — paint immediately at submit time using
+        // the temp id so the user sees their new chat in the list right
+        // away instead of after `session_created` arrives. The row will be
+        // promoted to the real id when `session_created` fires, and the
+        // 5s fallback timer in injectOptimisticSession will clean it up
+        // if the backend never acknowledges the session.
+        try {
+          if (selectedProject?.name && typeof window !== 'undefined' && window.injectOptimisticSession) {
+            const summaryRaw = currentInput.replace(/\s+/g, ' ').trim();
+            const summary = summaryRaw.length > 80 ? `${summaryRaw.slice(0, 77)}...` : summaryRaw;
+            window.injectOptimisticSession(
+              selectedProject.name,
+              {
+                id: sessionToActivate,
+                summary: summary || undefined,
+                lastActivity: new Date().toISOString(),
+              },
+              provider,
+            );
+          }
+        } catch (error) {
+          console.error('[ChatComposer] injectOptimisticSession (submit) failed:', error);
+        }
       } else {
         sessionLifecyclePhaseRef.current = 'submitting';
       }
