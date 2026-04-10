@@ -199,9 +199,42 @@ async function detectTaskMasterFolder(projectPath) {
 // Cache for extracted project directories
 const projectDirectoryCache = new Map();
 
-// Clear cache when needed (called when project files change)
+// Persistent authoritative map that survives cache clears. Populated when the
+// UI spawns a session with a known cwd, so `extractProjectDirectory` can
+// return the correct path even when the brand-new JSONL file has not yet had
+// a `cwd` entry written to it. Without this the file watcher's
+// `clearProjectDirectoryCache()` would wipe any pre-seeded hint before
+// getProjects() ran and we'd fall back to the lossy
+// `projectName.replace(/-/g, '/')` decode (which turns every `-` — including
+// the ones in real directory names like `bzs-context` and the ones that
+// encoded non-ASCII chars — into `/`, producing project rows like
+// `/Users/carter/p/Dev/kakao/bzs/context//////`).
+const knownProjectCwds = new Map();
+
+// Clear cache when needed (called when project files change). Intentionally
+// does NOT touch `knownProjectCwds` — those are authoritative hints from
+// explicit UI spawn events, not derived data.
 function clearProjectDirectoryCache() {
   projectDirectoryCache.clear();
+}
+
+// Claude Code CLI encodes cwd to a directory name by replacing every
+// character that is not ASCII alphanumeric or `-` with `-`. The inverse is
+// lossy (e.g. `bzs-context` and `bzs/context` both encode to `bzs-context`),
+// so we register cwds up-front instead of guessing at them later.
+function encodeCwdToProjectName(cwd) {
+  if (typeof cwd !== 'string' || cwd.length === 0) return null;
+  return cwd.replace(/[^a-zA-Z0-9-]/g, '-');
+}
+
+function registerKnownProjectCwd(cwd) {
+  const projectName = encodeCwdToProjectName(cwd);
+  if (!projectName) return;
+  knownProjectCwds.set(projectName, cwd);
+  // Also update the volatile cache so in-flight extract calls see the hint
+  // immediately; a later clear will drop this entry but `knownProjectCwds`
+  // will re-supply it on the next extract.
+  projectDirectoryCache.set(projectName, cwd);
 }
 
 // Load project configuration file
@@ -267,6 +300,15 @@ async function extractProjectDirectory(projectName) {
   // Check cache first
   if (projectDirectoryCache.has(projectName)) {
     return projectDirectoryCache.get(projectName);
+  }
+
+  // Authoritative hint registered by the WebSocket command handler when the
+  // UI spawned a session with a known cwd. Survives cache clears from the
+  // file watcher so brand-new JSONL dirs don't flash a lossy fallback path.
+  if (knownProjectCwds.has(projectName)) {
+    const hinted = knownProjectCwds.get(projectName);
+    projectDirectoryCache.set(projectName, hinted);
+    return hinted;
   }
 
   // Check project config for originalPath (manually added projects via UI or platform)
@@ -2552,6 +2594,7 @@ export {
   saveProjectConfig,
   extractProjectDirectory,
   clearProjectDirectoryCache,
+  registerKnownProjectCwd,
   getCodexSessions,
   getCodexSessionMessages,
   deleteCodexSession,

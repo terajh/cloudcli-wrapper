@@ -62,7 +62,7 @@ import pty from 'node-pty';
 import fetch from 'node-fetch';
 import mime from 'mime-types';
 
-import { getProjects, getSessions, renameProject, deleteSession, deleteProject, addProjectManually, extractProjectDirectory, clearProjectDirectoryCache, searchConversations } from './projects.js';
+import { getProjects, getSessions, renameProject, deleteSession, deleteProject, addProjectManually, extractProjectDirectory, clearProjectDirectoryCache, registerKnownProjectCwd, searchConversations } from './projects.js';
 import { queryClaudeSDK, abortClaudeSDKSession, isClaudeSDKSessionActive, getActiveClaudeSDKSessions, resolveToolApproval, getPendingApprovalsForSession, reconnectSessionWriter } from './claude-sdk.js';
 import { getAvailableClaudeModels } from './claude-model-probe.js';
 import { spawnCursor, abortCursorSession, isCursorSessionActive, getActiveCursorSessions } from './cursor-cli.js';
@@ -1526,6 +1526,20 @@ function handleChatConnection(ws, request) {
                 console.log('📁 Project:', data.options?.projectPath || 'Unknown');
                 console.log('🔄 Session:', data.options?.sessionId ? 'Resume' : 'New');
 
+                // Pre-seed the projectName→cwd cache with the authoritative cwd
+                // the client just gave us. Without this, the file watcher picks
+                // up the brand-new JSONL file before any entry with `cwd` has
+                // been written and `extractProjectDirectory` falls back to
+                // decoding the directory name with `.replace(/-/g, '/')`. That
+                // decoding is lossy (every `-` in a path like `bzs-context` or
+                // every non-ASCII character turns into a slash) and broadcasts
+                // a weird project row like `/Users/carter/p/Dev/kakao/bzs/context////`
+                // that briefly steals the session until the real data lands.
+                const projectCwd = data.options?.cwd || data.options?.projectPath;
+                if (projectCwd) {
+                    registerKnownProjectCwd(projectCwd);
+                }
+
                 // Use Claude Agents SDK
                 await queryClaudeSDK(data.command, data.options, writer);
             } else if (data.type === 'cursor-command') {
@@ -1539,12 +1553,16 @@ function handleChatConnection(ws, request) {
                 console.log('📁 Project:', data.options?.projectPath || data.options?.cwd || 'Unknown');
                 console.log('🔄 Session:', data.options?.sessionId ? 'Resume' : 'New');
                 console.log('🤖 Model:', data.options?.model || 'default');
+                const codexCwd = data.options?.cwd || data.options?.projectPath;
+                if (codexCwd) registerKnownProjectCwd(codexCwd);
                 await queryCodex(data.command, data.options, writer);
             } else if (data.type === 'gemini-command') {
                 console.log('[DEBUG] Gemini message:', data.command || '[Continue/Resume]');
                 console.log('📁 Project:', data.options?.projectPath || data.options?.cwd || 'Unknown');
                 console.log('🔄 Session:', data.options?.sessionId ? 'Resume' : 'New');
                 console.log('🤖 Model:', data.options?.model || 'default');
+                const geminiCwd = data.options?.cwd || data.options?.projectPath;
+                if (geminiCwd) registerKnownProjectCwd(geminiCwd);
                 await spawnGemini(data.command, data.options, writer);
             } else if (data.type === 'cursor-resume') {
                 // Backward compatibility: treat as cursor-command with resume and no prompt
