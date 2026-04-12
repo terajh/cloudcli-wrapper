@@ -48,20 +48,21 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
 
   Bash: {
     input: {
-      type: 'one-line',
-      icon: 'terminal',
-      getValue: (input) => input.command,
-      getSecondary: (input) => input.description,
-      action: 'copy',
-      style: 'terminal',
-      wrapText: true,
-      colorScheme: {
-        primary: 'text-green-400 font-mono',
-        secondary: 'text-gray-400',
-        background: '',
-        border: 'border-green-500 dark:border-green-400',
-        icon: 'text-green-500 dark:text-green-400'
-      }
+      type: 'collapsible',
+      title: (input) => {
+        const cmd = input.command || '';
+        const desc = input.description;
+        if (desc) return `$ ${desc}`;
+        // Show first line of command, truncated
+        const firstLine = cmd.split('\n')[0] || '';
+        return `$ ${firstLine.length > 60 ? firstLine.slice(0, 60) + '…' : firstLine}`;
+      },
+      defaultOpen: false,
+      contentType: 'text',
+      getContentProps: (input) => ({
+        content: input.command || '',
+        format: 'code'
+      })
     },
     result: {
       hideOnSuccess: true,
@@ -75,16 +76,18 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
 
   Read: {
     input: {
-      type: 'one-line',
-      label: 'Read',
-      getValue: (input) => input.file_path || '',
-      action: 'open-file',
-      colorScheme: {
-        primary: 'text-gray-700 dark:text-gray-300',
-        background: '',
-        border: 'border-gray-300 dark:border-gray-600',
-        icon: 'text-gray-500 dark:text-gray-400'
-      }
+      type: 'collapsible',
+      title: (input) => {
+        const filePath = input.file_path || '';
+        const filename = filePath.split('/').pop() || filePath;
+        return `Read ${filename}`;
+      },
+      defaultOpen: false,
+      contentType: 'text',
+      getContentProps: (input) => ({
+        content: input.file_path || '',
+        format: 'plain'
+      })
     },
     result: {
       hidden: true
@@ -166,18 +169,18 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
 
   Grep: {
     input: {
-      type: 'one-line',
-      label: 'Grep',
-      getValue: (input) => input.pattern,
-      getSecondary: (input) => input.path ? `in ${input.path}` : undefined,
-      action: 'jump-to-results',
-      colorScheme: {
-        primary: 'text-gray-700 dark:text-gray-300',
-        secondary: 'text-gray-500 dark:text-gray-400',
-        background: '',
-        border: 'border-gray-400 dark:border-gray-500',
-        icon: 'text-gray-500 dark:text-gray-400'
-      }
+      type: 'collapsible',
+      title: (input) => {
+        const pattern = input.pattern || '';
+        const path = input.path ? ` in ${input.path.split('/').pop()}` : '';
+        return `Grep "${pattern}"${path}`;
+      },
+      defaultOpen: false,
+      contentType: 'text',
+      getContentProps: (input) => ({
+        content: `Pattern: ${input.pattern || ''}\nPath: ${input.path || '(cwd)'}`,
+        format: 'plain'
+      })
     },
     result: {
       type: 'collapsible',
@@ -199,18 +202,18 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
 
   Glob: {
     input: {
-      type: 'one-line',
-      label: 'Glob',
-      getValue: (input) => input.pattern,
-      getSecondary: (input) => input.path ? `in ${input.path}` : undefined,
-      action: 'jump-to-results',
-      colorScheme: {
-        primary: 'text-gray-700 dark:text-gray-300',
-        secondary: 'text-gray-500 dark:text-gray-400',
-        background: '',
-        border: 'border-gray-400 dark:border-gray-500',
-        icon: 'text-gray-500 dark:text-gray-400'
-      }
+      type: 'collapsible',
+      title: (input) => {
+        const pattern = input.pattern || '';
+        const path = input.path ? ` in ${input.path.split('/').pop()}` : '';
+        return `Glob "${pattern}"${path}`;
+      },
+      defaultOpen: false,
+      contentType: 'text',
+      getContentProps: (input) => ({
+        content: `Pattern: ${input.pattern || ''}\nPath: ${input.path || '(cwd)'}`,
+        format: 'plain'
+      })
     },
     result: {
       type: 'collapsible',
@@ -253,14 +256,14 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
 
   TodoRead: {
     input: {
-      type: 'one-line',
-      label: 'TodoRead',
-      getValue: () => 'reading list',
-      action: 'none',
-      colorScheme: {
-        primary: 'text-gray-500 dark:text-gray-400',
-        border: 'border-violet-400 dark:border-violet-500'
-      }
+      type: 'collapsible',
+      title: 'Reading todo list',
+      defaultOpen: false,
+      contentType: 'text',
+      getContentProps: () => ({
+        content: 'Fetching current todo list…',
+        format: 'plain'
+      })
     },
     result: {
       type: 'collapsible',
@@ -287,16 +290,14 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
 
   TaskCreate: {
     input: {
-      type: 'one-line',
-      label: 'Task',
-      getValue: (input) => input.subject || 'Creating task',
-      getSecondary: (input) => input.status || undefined,
-      action: 'none',
-      colorScheme: {
-        primary: 'text-gray-700 dark:text-gray-300',
-        border: 'border-violet-400 dark:border-violet-500',
-        icon: 'text-violet-500 dark:text-violet-400'
-      }
+      type: 'collapsible',
+      title: (input) => `Task: ${input.subject || 'Creating task'}`,
+      defaultOpen: false,
+      contentType: 'text',
+      getContentProps: (input) => ({
+        content: input.subject || 'Creating task',
+        format: 'plain'
+      })
     },
     result: {
       hideOnSuccess: true
@@ -305,21 +306,20 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
 
   TaskUpdate: {
     input: {
-      type: 'one-line',
-      label: 'Task',
-      getValue: (input) => {
+      type: 'collapsible',
+      title: (input) => {
         const parts = [];
         if (input.taskId) parts.push(`#${input.taskId}`);
         if (input.status) parts.push(input.status);
         if (input.subject) parts.push(`"${input.subject}"`);
-        return parts.join(' → ') || 'updating';
+        return `Task: ${parts.join(' → ') || 'updating'}`;
       },
-      action: 'none',
-      colorScheme: {
-        primary: 'text-gray-700 dark:text-gray-300',
-        border: 'border-violet-400 dark:border-violet-500',
-        icon: 'text-violet-500 dark:text-violet-400'
-      }
+      defaultOpen: false,
+      contentType: 'text',
+      getContentProps: (input) => ({
+        content: JSON.stringify(input, null, 2),
+        format: 'code'
+      })
     },
     result: {
       hideOnSuccess: true
@@ -328,19 +328,18 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
 
   TaskList: {
     input: {
-      type: 'one-line',
-      label: 'Tasks',
-      getValue: () => 'listing tasks',
-      action: 'none',
-      colorScheme: {
-        primary: 'text-gray-500 dark:text-gray-400',
-        border: 'border-violet-400 dark:border-violet-500',
-        icon: 'text-violet-500 dark:text-violet-400'
-      }
+      type: 'collapsible',
+      title: 'Listing tasks',
+      defaultOpen: false,
+      contentType: 'text',
+      getContentProps: () => ({
+        content: 'Fetching task list…',
+        format: 'plain'
+      })
     },
     result: {
       type: 'collapsible',
-      defaultOpen: true,
+      defaultOpen: false,
       title: 'Task list',
       contentType: 'task',
       getContentProps: (result) => ({
@@ -351,19 +350,18 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
 
   TaskGet: {
     input: {
-      type: 'one-line',
-      label: 'Task',
-      getValue: (input) => input.taskId ? `#${input.taskId}` : 'fetching',
-      action: 'none',
-      colorScheme: {
-        primary: 'text-gray-700 dark:text-gray-300',
-        border: 'border-violet-400 dark:border-violet-500',
-        icon: 'text-violet-500 dark:text-violet-400'
-      }
+      type: 'collapsible',
+      title: (input) => `Task ${input.taskId ? `#${input.taskId}` : ''}`,
+      defaultOpen: false,
+      contentType: 'text',
+      getContentProps: (input) => ({
+        content: `Fetching task ${input.taskId || ''}`,
+        format: 'plain'
+      })
     },
     result: {
       type: 'collapsible',
-      defaultOpen: true,
+      defaultOpen: false,
       title: 'Task details',
       contentType: 'task',
       getContentProps: (result) => ({
@@ -496,7 +494,7 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
     input: {
       type: 'collapsible',
       title: 'Implementation plan',
-      defaultOpen: true,
+      defaultOpen: false,
       contentType: 'markdown',
       getContentProps: (input) => ({
         content: input.plan?.replace(/\\n/g, '\n') || input.plan
@@ -527,7 +525,7 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
     input: {
       type: 'collapsible',
       title: 'Implementation plan',
-      defaultOpen: true,
+      defaultOpen: false,
       contentType: 'markdown',
       getContentProps: (input) => ({
         content: input.plan?.replace(/\\n/g, '\n') || input.plan
@@ -554,13 +552,46 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
   },
 
   // ============================================================================
+  // CODEX TOOLS
+  // ============================================================================
+
+  exec_command: {
+    input: {
+      type: 'collapsible',
+      title: (input) => {
+        const cmd = input.command || input.cmd || '';
+        const firstLine = (typeof cmd === 'string' ? cmd : JSON.stringify(cmd)).split('\n')[0] || '';
+        return `$ ${firstLine.length > 60 ? firstLine.slice(0, 60) + '…' : firstLine}`;
+      },
+      defaultOpen: false,
+      contentType: 'text',
+      getContentProps: (input) => ({
+        content: input.command || input.cmd || JSON.stringify(input, null, 2),
+        format: 'code'
+      })
+    },
+    result: {
+      hideOnSuccess: true
+    }
+  },
+
+  // ============================================================================
   // DEFAULT FALLBACK
   // ============================================================================
 
   Default: {
     input: {
       type: 'collapsible',
-      title: 'Parameters',
+      title: (input) => {
+        // Try to extract a meaningful one-line summary
+        const cmd = input.command || input.cmd || input.query || input.path || input.file_path || '';
+        if (cmd) {
+          const str = typeof cmd === 'string' ? cmd : JSON.stringify(cmd);
+          const firstLine = str.split('\n')[0] || '';
+          return firstLine.length > 60 ? firstLine.slice(0, 60) + '…' : firstLine;
+        }
+        return 'Details';
+      },
       defaultOpen: false,
       contentType: 'text',
       getContentProps: (input) => ({
@@ -569,12 +600,7 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
       })
     },
     result: {
-      type: 'collapsible',
-      contentType: 'text',
-      getContentProps: (result) => ({
-        content: String(result?.content || ''),
-        format: 'plain'
-      })
+      hideOnSuccess: true
     }
   }
 };

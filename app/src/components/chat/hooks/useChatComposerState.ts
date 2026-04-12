@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type {
   ChangeEvent,
   ClipboardEvent,
@@ -22,6 +23,8 @@ import type {
 import type { Project, ProjectSession, SessionProvider } from '../../../types/app';
 import { escapeRegExp } from '../utils/chatFormatting';
 import { useFileMentions } from './useFileMentions';
+import { usePromptHistory } from './usePromptHistory';
+import { useFollowupQueue } from './useFollowupQueue';
 import { type SlashCommand, useSlashCommands } from './useSlashCommands';
 import type { SessionLifecyclePhase } from '../view/ChatInterface';
 
@@ -63,6 +66,7 @@ interface UseChatComposerStateArgs {
   setClaudeStatus: (status: { text: string; tokens: number; can_interrupt: boolean } | null) => void;
   setIsUserScrolledUp: (isScrolledUp: boolean) => void;
   setPendingPermissionRequests: Dispatch<SetStateAction<PendingPermissionRequest[]>>;
+  chatMessages: ChatMessage[];
 }
 
 interface MentionableFile {
@@ -136,7 +140,9 @@ export function useChatComposerState({
   setClaudeStatus,
   setIsUserScrolledUp,
   setPendingPermissionRequests,
+  chatMessages,
 }: UseChatComposerStateArgs) {
+  const { t } = useTranslation('chat');
   const [input, setInput] = useState(() => {
     if (typeof window !== 'undefined' && selectedProject) {
       return safeLocalStorage.getItem(`draft_input_${selectedProject.name}`) || '';
@@ -155,6 +161,7 @@ export function useChatComposerState({
     ((event: FormEvent<HTMLFormElement> | MouseEvent | TouchEvent | KeyboardEvent<HTMLTextAreaElement>) => Promise<void>) | null
   >(null);
   const inputValueRef = useRef(input);
+  const undoneMessageRef = useRef<string | null>(null);
 
   const handleBuiltInCommand = useCallback(
     (result: CommandExecutionResult) => {
@@ -232,11 +239,50 @@ export function useChatComposerState({
           }
           break;
 
+        case 'undo': {
+          const lastUserMsg = [...chatMessages].reverse().find((m) => m.type === 'user');
+          if (!lastUserMsg) {
+            addMessage({
+              type: 'assistant',
+              content: t('commands.nothingToUndo'),
+              timestamp: Date.now(),
+            });
+            break;
+          }
+          const restoredContent = String(lastUserMsg.content || '');
+          undoneMessageRef.current = restoredContent;
+          rewindMessages(2);
+          setInput(restoredContent);
+          inputValueRef.current = restoredContent;
+          break;
+        }
+
+        case 'redo': {
+          const redoContent = undoneMessageRef.current;
+          if (!redoContent) {
+            addMessage({
+              type: 'assistant',
+              content: t('commands.nothingToRedo'),
+              timestamp: Date.now(),
+            });
+            break;
+          }
+          undoneMessageRef.current = null;
+          setInput(redoContent);
+          inputValueRef.current = redoContent;
+          setTimeout(() => {
+            if (handleSubmitRef.current) {
+              handleSubmitRef.current(createFakeSubmitEvent());
+            }
+          }, 0);
+          break;
+        }
+
         default:
           console.warn('Unknown built-in command action:', action);
       }
     },
-    [onFileOpen, onShowSettings, addMessage, clearMessages, rewindMessages],
+    [onFileOpen, onShowSettings, addMessage, clearMessages, rewindMessages, chatMessages, t],
   );
 
   const handleCustomCommand = useCallback(async (result: CommandExecutionResult) => {
@@ -386,12 +432,16 @@ export function useChatComposerState({
     selectFile,
     setCursorPosition,
     handleFileMentionsKeyDown,
+    resetFileDropdown,
   } = useFileMentions({
     selectedProject,
     input,
     setInput,
     textareaRef,
   });
+
+  const promptHistory = usePromptHistory();
+  const followupQueue = useFollowupQueue();
 
   const syncInputOverlayScroll = useCallback((target: HTMLTextAreaElement) => {
     if (!inputHighlightRef.current || !target) {
@@ -477,7 +527,21 @@ export function useChatComposerState({
     ) => {
       event.preventDefault();
       const currentInput = inputValueRef.current;
-      if (!currentInput.trim() || isLoading || !selectedProject) {
+      if (!currentInput.trim() || !selectedProject) {
+        return;
+      }
+
+      // If model is generating, enqueue the message for later submission
+      if (isLoading) {
+        followupQueue.enqueue(currentInput);
+        promptHistory.push(currentInput);
+        promptHistory.reset();
+        setInput('');
+        inputValueRef.current = '';
+        setIsTextareaExpanded(false);
+        if (textareaRef.current) {
+          textareaRef.current.style.height = 'auto';
+        }
         return;
       }
 
@@ -569,14 +633,20 @@ export function useChatComposerState({
       addMessage(assistantPlaceholder);
       setIsLoading(true); // Processing banner starts
       setCanAbortSession(true);
-      setClaudeStatus({
-        text: 'Processing',
-        tokens: 0,
-        can_interrupt: true,
-      });
+
+      // Delay the status bar slightly so the placeholder message renders
+      // first — the user sees their message + "thinking dots" landing zone
+      // before the status banner slides in, creating a smoother progression.
+      setTimeout(() => {
+        setClaudeStatus({
+          text: 'Processing',
+          tokens: 0,
+          can_interrupt: true,
+        });
+      }, 50);
 
       setIsUserScrolledUp(false);
-      setTimeout(() => scrollToBottom(), 100);
+      setTimeout(() => scrollToBottom(), 60);
 
       if (!effectiveSessionId && !selectedSession?.id) {
         if (typeof window !== 'undefined') {
@@ -719,6 +789,8 @@ export function useChatComposerState({
         });
       }
 
+      promptHistory.push(currentInput);
+      promptHistory.reset();
       setInput('');
       inputValueRef.current = '';
       resetCommandMenuState();
@@ -742,12 +814,14 @@ export function useChatComposerState({
       currentSessionId,
       cursorModel,
       executeCommand,
+      followupQueue,
       geminiModel,
       isLoading,
       onSessionActive,
       onSessionProcessing,
       pendingViewSessionRef,
       permissionMode,
+      promptHistory,
       provider,
       resetCommandMenuState,
       scrollToBottom,
@@ -835,6 +909,51 @@ export function useChatComposerState({
     [handleCommandInputChange, resetCommandMenuState, setCursorPosition],
   );
 
+  const handleAbortSession = useCallback(() => {
+    if (!canAbortSession) {
+      return;
+    }
+
+    const pendingSessionId =
+      typeof window !== 'undefined' ? sessionStorage.getItem('pendingSessionId') : null;
+    const cursorSessionId =
+      typeof window !== 'undefined' ? sessionStorage.getItem('cursorSessionId') : null;
+
+    const candidateSessionIds = [
+      currentSessionId,
+      pendingViewSessionRef.current?.sessionId || null,
+      pendingSessionId,
+      provider === 'cursor' ? cursorSessionId : null,
+      selectedSession?.id || null,
+    ];
+
+    const targetSessionId =
+      candidateSessionIds.find((sessionId) => Boolean(sessionId) && !isTemporarySessionId(sessionId)) || null;
+
+    if (!targetSessionId) {
+      if (provider === 'codex') {
+        const tempIdToReport =
+          (currentSessionId && isTemporarySessionId(currentSessionId) ? currentSessionId : null) ||
+          pendingViewSessionRef.current?.tempId ||
+          pendingViewSessionRef.current?.sessionId ||
+          null;
+        sendMessage({
+          type: 'abort-session',
+          sessionId: tempIdToReport,
+          provider,
+        });
+        return;
+      }
+      return;
+    }
+
+    sendMessage({
+      type: 'abort-session',
+      sessionId: targetSessionId,
+      provider,
+    });
+  }, [canAbortSession, currentSessionId, pendingViewSessionRef, provider, selectedSession?.id, sendMessage]);
+
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLTextAreaElement>) => {
       if (handleCommandMenuKeyDown(event)) {
@@ -842,6 +961,58 @@ export function useChatComposerState({
       }
 
       if (handleFileMentionsKeyDown(event)) {
+        return;
+      }
+
+      // --- Escape cascade ---
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        if (showCommandMenu) {
+          resetCommandMenuState();
+        } else if (showFileDropdown) {
+          resetFileDropdown();
+        } else if (isLoading && canAbortSession) {
+          handleAbortSession();
+        } else {
+          textareaRef.current?.blur();
+        }
+        return;
+      }
+
+      // --- Prompt history: ArrowUp / ArrowDown ---
+      if (event.key === 'ArrowUp' && !event.shiftKey && !event.ctrlKey && !event.metaKey) {
+        const textarea = textareaRef.current;
+        if (textarea) {
+          const textBefore = textarea.value.slice(0, textarea.selectionStart);
+          const isFirstLine = !textBefore.includes('\n');
+          const isAtStart = textarea.selectionStart === 0;
+          if (isFirstLine && isAtStart) {
+            const entry = promptHistory.navigateUp(inputValueRef.current);
+            if (entry !== null) {
+              event.preventDefault();
+              setInput(entry);
+              inputValueRef.current = entry;
+            }
+          }
+        }
+        return;
+      }
+
+      if (event.key === 'ArrowDown' && !event.shiftKey && !event.ctrlKey && !event.metaKey) {
+        const textarea = textareaRef.current;
+        if (textarea) {
+          const textAfter = textarea.value.slice(textarea.selectionEnd);
+          const isLastLine = !textAfter.includes('\n');
+          const isAtEnd = textarea.selectionEnd === textarea.value.length;
+          if (isLastLine && isAtEnd) {
+            const entry = promptHistory.navigateDown();
+            if (entry !== null) {
+              event.preventDefault();
+              setInput(entry);
+              inputValueRef.current = entry;
+            }
+          }
+        }
         return;
       }
 
@@ -866,10 +1037,16 @@ export function useChatComposerState({
       }
     },
     [
+      canAbortSession,
       cyclePermissionMode,
+      handleAbortSession,
       handleCommandMenuKeyDown,
       handleFileMentionsKeyDown,
       handleSubmit,
+      isLoading,
+      promptHistory,
+      resetCommandMenuState,
+      resetFileDropdown,
       sendByCtrlEnter,
       showCommandMenu,
       showFileDropdown,
@@ -907,39 +1084,6 @@ export function useChatComposerState({
     }
     setIsTextareaExpanded(false);
   }, [resetCommandMenuState]);
-
-  const handleAbortSession = useCallback(() => {
-    if (!canAbortSession) {
-      return;
-    }
-
-    const pendingSessionId =
-      typeof window !== 'undefined' ? sessionStorage.getItem('pendingSessionId') : null;
-    const cursorSessionId =
-      typeof window !== 'undefined' ? sessionStorage.getItem('cursorSessionId') : null;
-
-    const candidateSessionIds = [
-      currentSessionId,
-      pendingViewSessionRef.current?.sessionId || null,
-      pendingSessionId,
-      provider === 'cursor' ? cursorSessionId : null,
-      selectedSession?.id || null,
-    ];
-
-    const targetSessionId =
-      candidateSessionIds.find((sessionId) => Boolean(sessionId) && !isTemporarySessionId(sessionId)) || null;
-
-    if (!targetSessionId) {
-      console.warn('Abort requested but no concrete session ID is available yet.');
-      return;
-    }
-
-    sendMessage({
-      type: 'abort-session',
-      sessionId: targetSessionId,
-      provider,
-    });
-  }, [canAbortSession, currentSessionId, pendingViewSessionRef, provider, selectedSession?.id, sendMessage]);
 
   const handleTranscript = useCallback((text: string) => {
     if (!text.trim()) {
@@ -1018,6 +1162,21 @@ export function useChatComposerState({
     [onInputFocusChange],
   );
 
+  const submitFollowup = useCallback(() => {
+    const next = followupQueue.dequeue();
+    if (next === null) {
+      return;
+    }
+    setInput(next);
+    inputValueRef.current = next;
+    // Defer to next tick so the input state settles before dispatching
+    setTimeout(() => {
+      if (handleSubmitRef.current) {
+        handleSubmitRef.current(createFakeSubmitEvent());
+      }
+    }, 0);
+  }, [followupQueue]);
+
   return {
     input,
     setInput,
@@ -1062,5 +1221,7 @@ export function useChatComposerState({
     handleGrantToolPermission,
     handleInputFocusChange,
     isInputFocused,
+    followupQueueCount: followupQueue.count,
+    submitFollowup,
   };
 }

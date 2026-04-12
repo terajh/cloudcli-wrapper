@@ -8,6 +8,7 @@ import { useChatProviderState } from '../hooks/useChatProviderState';
 import { useChatSessionState } from '../hooks/useChatSessionState';
 import { useChatRealtimeHandlers } from '../hooks/useChatRealtimeHandlers';
 import { useChatComposerState } from '../hooks/useChatComposerState';
+import { usePlaceholderRotation } from '../hooks/usePlaceholderRotation';
 import { useSessionStore } from '../../../stores/useSessionStore';
 import ChatMessagesPane from './subcomponents/ChatMessagesPane';
 import ChatComposer from './subcomponents/ChatComposer';
@@ -72,6 +73,7 @@ function ChatInterface({
   const accumulatedStreamRef = useRef('');
   const pendingViewSessionRef = useRef<PendingViewSession | null>(null);
   const sessionLifecyclePhaseRef = useRef<SessionLifecyclePhase>('idle');
+  const promotionInProgressRef = useRef(false);
 
   const resetStreamingState = useCallback(() => {
     if (streamTimerRef.current) {
@@ -147,6 +149,7 @@ function ChatInterface({
     resetStreamingState,
     pendingViewSessionRef,
     sessionLifecyclePhaseRef,
+    promotionInProgressRef,
     sessionStore,
   });
 
@@ -194,6 +197,8 @@ function ChatInterface({
     handleGrantToolPermission,
     handleInputFocusChange,
     isInputFocused,
+    followupQueueCount,
+    submitFollowup,
   } = useChatComposerState({
     selectedProject,
     selectedSession,
@@ -226,6 +231,7 @@ function ChatInterface({
     setClaudeStatus,
     setIsUserScrolledUp,
     setPendingPermissionRequests,
+    chatMessages,
   });
 
   // On WebSocket reconnect, re-fetch the current session's messages from the server
@@ -256,6 +262,7 @@ function ChatInterface({
     setPendingPermissionRequests,
     pendingViewSessionRef,
     sessionLifecyclePhaseRef,
+    promotionInProgressRef,
     streamBufferRef,
     streamTimerRef,
     accumulatedStreamRef,
@@ -265,34 +272,31 @@ function ChatInterface({
     onReplaceTemporarySession,
     onNavigateToSession,
     onWebSocketReconnect: handleWebSocketReconnect,
+    onFollowupReady: submitFollowup,
     sessionStore,
   });
 
-  useEffect(() => {
-    if (!isLoading || !canAbortSession) {
-      return;
-    }
-
-    const handleGlobalEscape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || event.repeat || event.defaultPrevented) {
-        return;
-      }
-
-      event.preventDefault();
-      handleAbortSession();
-    };
-
-    document.addEventListener('keydown', handleGlobalEscape, { capture: true });
-    return () => {
-      document.removeEventListener('keydown', handleGlobalEscape, { capture: true });
-    };
-  }, [canAbortSession, handleAbortSession, isLoading]);
+  const isEmptyState = !selectedSession && !currentSessionId;
+  const rotatingPlaceholder = usePlaceholderRotation(isEmptyState);
 
   useEffect(() => {
     return () => {
       resetStreamingState();
     };
   }, [resetStreamingState]);
+
+  // Expose a global reset so handleNewSession (useProjectsState) can clear
+  // the loading/streaming state when the user clicks "새 스레드" while a
+  // previous session is still generating a response.
+  useEffect(() => {
+    (window as any).__vienna_resetChatLoading__ = () => {
+      setIsLoading(false);
+      setCanAbortSession(false);
+      setClaudeStatus(null);
+      resetStreamingState();
+    };
+    return () => { delete (window as any).__vienna_resetChatLoading__; };
+  }, [setIsLoading, setCanAbortSession, setClaudeStatus, resetStreamingState]);
 
   if (!selectedProject) {
     const selectedProviderLabel =
@@ -366,6 +370,8 @@ function ChatInterface({
           showThinking={showThinking}
           selectedProject={selectedProject}
           isLoading={isLoading}
+          isUserScrolledUp={isUserScrolledUp}
+          scrollToBottom={scrollToBottomAndReset}
         />
 
         <ChatComposer
@@ -423,20 +429,25 @@ function ChatInterface({
           onTextareaInput={handleTextareaInput}
           onInputFocusChange={handleInputFocusChange}
           isInputFocused={isInputFocused}
-          placeholder={t('input.placeholder', {
-            provider:
-              provider === 'cursor'
-                ? t('messageTypes.cursor')
-                : provider === 'codex'
-                  ? t('messageTypes.codex')
-                  : provider === 'gemini'
-                    ? t('messageTypes.gemini')
-                    : t('messageTypes.claude'),
-          })}
+          placeholder={
+            isEmptyState && rotatingPlaceholder
+              ? rotatingPlaceholder
+              : t('input.placeholder', {
+                  provider:
+                    provider === 'cursor'
+                      ? t('messageTypes.cursor')
+                      : provider === 'codex'
+                        ? t('messageTypes.codex')
+                        : provider === 'gemini'
+                          ? t('messageTypes.gemini')
+                          : t('messageTypes.claude'),
+                })
+          }
           isTextareaExpanded={isTextareaExpanded}
           sendByCtrlEnter={sendByCtrlEnter}
           onTranscript={handleTranscript}
           projectPath={selectedProject.fullPath || selectedProject.path || ''}
+          followupQueueCount={followupQueueCount}
         />
       </div>
 

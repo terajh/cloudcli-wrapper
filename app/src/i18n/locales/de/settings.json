@@ -115,6 +115,7 @@
     "projectSorting": {
       "label": "Projektsortierung",
       "description": "Wie Projekte in der Seitenleiste angeordnet werden",
+      "addedOrder": "Hinzugefügte Reihenfolge",
       "alphabetical": "Alphabetisch",
       "recentActivity": "Letzte Aktivität"
     },

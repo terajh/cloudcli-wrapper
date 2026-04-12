@@ -93,6 +93,7 @@ interface ChatComposerProps {
   sendByCtrlEnter?: boolean;
   onTranscript: (text: string) => void;
   projectPath?: string;
+  followupQueueCount?: number;
 }
 
 export default function ChatComposer({
@@ -151,6 +152,7 @@ export default function ChatComposer({
   sendByCtrlEnter,
   onTranscript,
   projectPath,
+  followupQueueCount = 0,
 }: ChatComposerProps) {
   const { t } = useTranslation('chat');
   const textareaRect = textareaRef.current?.getBoundingClientRect();
@@ -335,24 +337,34 @@ export default function ChatComposer({
               />
             </div>
 
-            {/* 우측 하단: 제출 버튼만 */}
-            <button
-              type="submit"
-              disabled={!input.trim() || isLoading}
-              onMouseDown={(event) => {
-                event.preventDefault();
-                onSubmit(event);
-              }}
-              onTouchStart={(event) => {
-                event.preventDefault();
-                onSubmit(event);
-              }}
-              className="absolute bottom-1.5 right-1.5 flex h-7 w-7 items-center justify-center rounded-lg bg-primary transition-all duration-200 hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:ring-offset-1 focus:ring-offset-background disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
-            >
-              <svg className="h-3.5 w-3.5 rotate-90 transform text-primary-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-              </svg>
-            </button>
+            {/* 우측 하단: 제출 버튼 + 큐 배지 */}
+            <div className="absolute bottom-1.5 right-1.5 flex items-center gap-1">
+              {followupQueueCount > 0 && (
+                <span
+                  className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary/20 px-1.5 text-[10px] font-medium text-primary"
+                  title={t('input.followupQueued', { count: followupQueueCount })}
+                >
+                  {followupQueueCount}
+                </span>
+              )}
+              <button
+                type="submit"
+                disabled={!input.trim()}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  onSubmit(event);
+                }}
+                onTouchStart={(event) => {
+                  event.preventDefault();
+                  onSubmit(event);
+                }}
+                className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary transition-all duration-200 hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:ring-offset-1 focus:ring-offset-background disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
+              >
+                <svg className="h-3.5 w-3.5 rotate-90 transform text-primary-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
       </form>}

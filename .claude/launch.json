@@ -9,8 +9,8 @@
     },
     {
       "name": "Vite Dev Server (React UI)",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "app", "run", "client"],
+      "runtimeExecutable": "/Users/carter.p/.nvm/versions/node/v24.3.0/bin/node",
+      "runtimeArgs": ["app/node_modules/vite/bin/vite.js"],
       "port": 5173
     },
     {

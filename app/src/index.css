@@ -97,22 +97,24 @@
      * 사이드바 영역 = A + lift (`hsl(var(--sidebar-background))`)
      */
     --app-base-l: 0%;
+    --app-base-h: 0;
+    --app-base-s: 0%;
     --sidebar-lift: 12%;
 
-    --background: 0 0% var(--app-base-l);
-    --sidebar-background: 0 0% calc(var(--app-base-l) + var(--sidebar-lift));
+    --background: var(--app-base-h) var(--app-base-s) var(--app-base-l);
+    --sidebar-background: var(--app-base-h) var(--app-base-s) calc(var(--app-base-l) + var(--sidebar-lift));
     --foreground: 210 40% 98%;
-    --card: 0 0% 9%;
+    --card: var(--app-base-h) var(--app-base-s) calc(var(--app-base-l) + 9%);
     --card-foreground: 210 40% 98%;
-    --popover: 0 0% 9%;
+    --popover: var(--app-base-h) var(--app-base-s) calc(var(--app-base-l) + 9%);
     --popover-foreground: 210 40% 98%;
     --primary: 217.2 91.2% 59.8%;
     --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 0 0% 16%;
+    --secondary: var(--app-base-h) var(--app-base-s) calc(var(--app-base-l) + 16%);
     --secondary-foreground: 210 40% 98%;
-    --muted: 0 0% 16%;
-    --muted-foreground: 0 0% 60%;
-    --accent: 0 0% 16%;
+    --muted: var(--app-base-h) var(--app-base-s) calc(var(--app-base-l) + 16%);
+    --muted-foreground: var(--app-base-h) var(--app-base-s) 60%;
+    --accent: var(--app-base-h) var(--app-base-s) calc(var(--app-base-l) + 16%);
     --accent-foreground: 210 40% 98%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
@@ -411,6 +413,79 @@
     scrollbar-color: rgba(107, 114, 128, 0.5) rgba(31, 41, 55, 0.5);
   }
   
+  /* Chat scroll container — elegant thin scrollbar, always visible */
+  .chat-scroll-container {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(156, 163, 175, 0.35) transparent;
+    overflow-y: scroll !important;
+  }
+
+  .chat-scroll-container::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .chat-scroll-container::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .chat-scroll-container::-webkit-scrollbar-thumb {
+    background-color: rgba(156, 163, 175, 0.3);
+    border-radius: 9999px;
+  }
+
+  .chat-scroll-container::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(156, 163, 175, 0.5);
+  }
+
+  .dark .chat-scroll-container {
+    scrollbar-color: rgba(156, 163, 175, 0.25) transparent;
+  }
+
+  .dark .chat-scroll-container::-webkit-scrollbar-thumb {
+    background-color: rgba(156, 163, 175, 0.25);
+  }
+
+  .dark .chat-scroll-container::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(156, 163, 175, 0.45);
+  }
+
+  /* Thinking dot bounce animation */
+  @keyframes thinking-bounce {
+    0%, 60%, 100% {
+      transform: translateY(0);
+      opacity: 0.4;
+    }
+    30% {
+      transform: translateY(-6px);
+      opacity: 1;
+    }
+  }
+
+  .thinking-dot {
+    animation: thinking-bounce 1.4s ease-in-out infinite;
+  }
+
+  /* Chat message fade-in animation */
+  @keyframes chat-message-fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .chat-message {
+    animation: chat-message-fade-in 200ms ease-out both;
+  }
+
+  /* Skip animation for messages already in view (loaded history) */
+  .chat-messages-no-animate .chat-message {
+    animation: none;
+  }
+
   /* Ensure checkbox styling is preserved */
   input[type="checkbox"] {
     @apply accent-blue-600;
@@ -994,6 +1069,57 @@
       outline: 3px solid transparent;
       outline-offset: 4px;
       background-color: transparent;
+    }
+  }
+
+  /* Odometer digit strip transition */
+  .odometer-digit-strip {
+    transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  /* TextReveal transition */
+  .text-reveal-inner {
+    transition: opacity 200ms ease-out, transform 200ms ease-out, filter 200ms ease-out;
+  }
+
+  /* Provider switch transition */
+  .provider-switch-enter {
+    opacity: 0;
+    transform: scale(0.95);
+    filter: blur(2px);
+  }
+
+  .provider-switch-active {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+    transition: opacity 200ms ease-out, transform 200ms ease-out, filter 200ms ease-out;
+  }
+
+  /* Reduced motion: disable all custom animations */
+  @media (prefers-reduced-motion: reduce) {
+    .odometer-digit-strip {
+      transition: none;
+    }
+
+    .text-reveal-inner {
+      transition: none;
+    }
+
+    .provider-switch-enter,
+    .provider-switch-active {
+      transition: none;
+      opacity: 1;
+      transform: none;
+      filter: none;
+    }
+
+    .chat-message {
+      animation: none;
+    }
+
+    .thinking-dot {
+      animation: none;
     }
   }
 }

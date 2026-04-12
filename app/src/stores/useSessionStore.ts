@@ -76,6 +76,8 @@ export interface SessionSlot {
   /** @internal Cache-invalidation refs for computeMerged */
   _lastServerRef: NormalizedMessage[];
   _lastRealtimeRef: NormalizedMessage[];
+  /** @internal True once placeholders have been stripped from this slot. */
+  _placeholderRemoved: boolean;
   status: SessionStatus;
   fetchedAt: number;
   total: number;
@@ -93,6 +95,7 @@ function createEmptySlot(): SessionSlot {
     merged: EMPTY,
     _lastServerRef: EMPTY,
     _lastRealtimeRef: EMPTY,
+    _placeholderRemoved: false,
     status: 'idle',
     fetchedAt: 0,
     total: 0,
@@ -241,6 +244,7 @@ export function useSessionStore() {
         merged: EMPTY,
         _lastServerRef: EMPTY,
         _lastRealtimeRef: EMPTY,
+        _placeholderRemoved: tempSlot._placeholderRemoved || (existingRealSlot?._placeholderRemoved ?? false),
         status: pickStatus(),
         // Force fresh so the session load effect doesn't re-fetch and wipe us.
         fetchedAt: Date.now(),
@@ -499,18 +503,22 @@ export function useSessionStore() {
       kind: 'stream_delta',
       content: accumulatedText,
     };
-    // Strip optimistic placeholders on first streaming token — the placeholder
-    // has done its job of reserving visual space for the assistant reply.
-    const withoutPlaceholder = slot.realtimeMessages.filter(
-      m => !(typeof m.id === 'string' && m.id.startsWith('__placeholder_')),
-    );
-    const idx = withoutPlaceholder.findIndex(m => m.id === streamId);
+    // Strip optimistic placeholders only once per slot — avoids O(n) filter
+    // on every streaming token (~30fps × message count).
+    let base = slot.realtimeMessages;
+    if (!slot._placeholderRemoved) {
+      base = base.filter(
+        m => !(typeof m.id === 'string' && m.id.startsWith('__placeholder_')),
+      );
+      slot._placeholderRemoved = true;
+    }
+    const idx = base.findIndex(m => m.id === streamId);
     if (idx >= 0) {
-      const next = [...withoutPlaceholder];
+      const next = [...base];
       next[idx] = msg;
       slot.realtimeMessages = next;
     } else {
-      slot.realtimeMessages = [...withoutPlaceholder, msg];
+      slot.realtimeMessages = [...base, msg];
     }
     recomputeMergedIfNeeded(slot);
     notify(sessionId);

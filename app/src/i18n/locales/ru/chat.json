@@ -61,7 +61,8 @@
   },
   "thinking": {
     "title": "Думаю...",
-    "emoji": "💭 Думаю..."
+    "emoji": "💭 Думаю...",
+    "generating": "Генерация ответа…"
   },
   "json": {
     "response": "JSON ответ"
@@ -134,7 +135,8 @@
     "clickToChangeMode": "Нажмите для смены режима разрешений (или нажмите Tab в поле ввода)",
     "showAllCommands": "Показать все команды",
     "clearInput": "Очистить ввод",
-    "scrollToBottom": "Прокрутить вниз"
+    "scrollToBottom": "Прокрутить вниз",
+    "followupQueued": "{{count}} сообщ. в очереди"
   },
   "thinkingMode": {
     "selector": {
@@ -268,5 +270,13 @@
   },
   "tasks": {
     "nextTaskPrompt": "Начать следующую задачу"
+  },
+  "scroll": {
+    "toBottom": "Вниз",
+    "newMessages": "Новые сообщения ↓"
+  },
+  "commands": {
+    "nothingToUndo": "Нечего отменять.",
+    "nothingToRedo": "Нечего повторять."
   }
 }

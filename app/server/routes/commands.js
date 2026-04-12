@@ -239,6 +239,18 @@ const builtInCommands = [
     description: 'Rewind the conversation to a previous state',
     namespace: 'builtin',
     metadata: { type: 'builtin' }
+  },
+  {
+    name: '/undo',
+    description: 'Undo last message and restore prompt',
+    namespace: 'builtin',
+    metadata: { type: 'builtin' }
+  },
+  {
+    name: '/redo',
+    description: 'Re-send the last undone message',
+    namespace: 'builtin',
+    metadata: { type: 'builtin' }
   }
 ];
 
@@ -507,6 +519,26 @@ Custom commands can be created in:
       data: {
         steps,
         message: `Rewinding conversation by ${steps} step${steps > 1 ? 's' : ''}...`
+      }
+    };
+  },
+
+  '/undo': async (args, context) => {
+    return {
+      type: 'builtin',
+      action: 'undo',
+      data: {
+        message: 'Undoing last turn and restoring prompt...'
+      }
+    };
+  },
+
+  '/redo': async (args, context) => {
+    return {
+      type: 'builtin',
+      action: 'redo',
+      data: {
+        message: 'Re-sending undone message...'
       }
     };
   }

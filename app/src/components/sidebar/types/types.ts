@@ -1,6 +1,6 @@
 import type { LoadingProgress, Project, ProjectSession, SessionProvider } from '../../../types/app';
 
-export type ProjectSortOrder = 'name' | 'date';
+export type ProjectSortOrder = 'name' | 'date' | 'added';
 
 export type SessionWithProvider = ProjectSession & {
   __provider: SessionProvider;

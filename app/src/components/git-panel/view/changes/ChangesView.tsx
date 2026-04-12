@@ -151,10 +151,14 @@ export default function ChangesView({
 
       {!gitStatus?.error && <FileStatusLegend isMobile={isMobile} />}
 
-      <div className={`flex-1 overflow-y-auto ${isMobile ? 'pb-mobile-nav' : ''}`}>
+      <div className={`flex-1 overflow-y-auto scrollbar-thin ${isMobile ? 'pb-mobile-nav' : ''}`}>
         {isLoading ? (
-          <div className="flex h-32 items-center justify-center">
-            <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
+          <div className="flex h-32 flex-col items-center justify-center gap-3">
+            <div className="relative">
+              <RefreshCw className="h-5 w-5 animate-spin text-primary" />
+              <span className="absolute -right-1 -top-1 h-2 w-2 animate-ping rounded-full bg-primary/60" />
+            </div>
+            <span className="text-xs text-muted-foreground">Loading changes…</span>
           </div>
         ) : gitStatus?.hasCommits === false ? (
           <div className="flex flex-col items-center justify-center p-8 text-center">
@@ -190,8 +194,22 @@ export default function ChangesView({
           </div>
         ) : (
           <div className={isMobile ? 'pb-4' : ''}>
+            {/* Main worktree group header */}
+            <div className="flex items-center gap-1.5 border-b border-border/60 bg-primary/5 px-3 py-1.5">
+              <GitBranch className="h-3 w-3 text-primary" />
+              <span className="text-xs font-semibold text-primary">
+                {gitStatus.branch || 'main'}
+              </span>
+              <span className="text-[10px] text-muted-foreground/70">
+                (main worktree)
+              </span>
+              <span className="ml-auto text-[10px] tabular-nums text-muted-foreground">
+                {changedFiles.length}
+              </span>
+            </div>
+
             {/* STAGED section */}
-            <div className="flex items-center justify-between border-b border-border/60 bg-muted/30 px-3 py-1.5">
+            <div className="flex items-center justify-between border-b border-border/40 px-3 py-1.5 pl-5">
               <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Staged ({selectedFiles.size})
               </span>
@@ -205,7 +223,7 @@ export default function ChangesView({
               )}
             </div>
             {selectedFiles.size === 0 ? (
-              <div className="px-3 py-2 text-xs text-muted-foreground italic">No staged files</div>
+              <div className="px-3 py-2 pl-5 text-xs text-muted-foreground italic">No staged files</div>
             ) : (
               <FileChangeList
                 gitStatus={gitStatus}
@@ -224,7 +242,7 @@ export default function ChangesView({
             )}
 
             {/* CHANGES section */}
-            <div className="flex items-center justify-between border-b border-border/60 bg-muted/30 px-3 py-1.5">
+            <div className="flex items-center justify-between border-b border-border/40 px-3 py-1.5 pl-5">
               <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Changes ({unstagedFiles.size})
               </span>
@@ -238,7 +256,7 @@ export default function ChangesView({
               )}
             </div>
             {unstagedFiles.size === 0 ? (
-              <div className="px-3 py-2 text-xs text-muted-foreground italic">All changes staged</div>
+              <div className="px-3 py-2 pl-5 text-xs text-muted-foreground italic">All changes staged</div>
             ) : (
               <FileChangeList
                 gitStatus={gitStatus}
@@ -256,10 +274,7 @@ export default function ChangesView({
               />
             )}
 
-            {/* WORKTREES — 메인 worktree 외 추가로 등록된 worktree 들의
-                변경사항을 그룹별로 표시. read-only 요약(파일 목록만)이며,
-                각 worktree 의 staging/commit 은 그 worktree 를 직접 선택해서
-                작업해야 한다. */}
+            {/* Linked worktrees — 각 워크트리의 변경사항을 별도 그룹으로 표시 */}
             {gitStatus.worktrees && gitStatus.worktrees.length > 0 && (
               <WorktreeGroups worktrees={gitStatus.worktrees} />
             )}
@@ -279,12 +294,6 @@ function countWorktreeFiles(wt: GitWorktreeStatus): number {
 function WorktreeGroups({ worktrees }: { worktrees: GitWorktreeStatus[] }) {
   return (
     <>
-      <div className="mt-4 flex items-center gap-1.5 border-y border-border/60 bg-muted/20 px-3 py-1.5">
-        <GitBranch className="h-3 w-3 text-muted-foreground" />
-        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Worktrees ({worktrees.length})
-        </span>
-      </div>
       {worktrees.map((wt) => (
         <WorktreeGroup key={wt.path} worktree={wt} />
       ))}
@@ -294,34 +303,36 @@ function WorktreeGroups({ worktrees }: { worktrees: GitWorktreeStatus[] }) {
 
 function WorktreeGroup({ worktree }: { worktree: GitWorktreeStatus }) {
   const fileCount = countWorktreeFiles(worktree);
-  const [isExpanded, setIsExpanded] = useState(fileCount > 0);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   return (
-    <div className="border-b border-border/40">
+    <div>
+      {/* Worktree group header — same style as main worktree */}
       <button
         type="button"
         onClick={() => setIsExpanded((prev) => !prev)}
-        className="flex w-full items-center gap-1.5 px-3 py-1.5 text-left transition-colors hover:bg-muted/30"
+        className="mt-2 flex w-full items-center gap-1.5 border-b border-border/60 bg-muted/20 px-3 py-1.5 text-left transition-colors hover:bg-muted/30"
       >
         {isExpanded ? (
           <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
         ) : (
           <ChevronRight className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
         )}
-        <span className="truncate text-xs font-medium text-foreground" title={worktree.path}>
-          {worktree.name}
+        <GitBranch className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+        <span className="truncate text-xs font-semibold text-foreground" title={worktree.path}>
+          {worktree.branch || worktree.name}
         </span>
-        {worktree.branch && (
-          <span className="truncate text-[10px] text-muted-foreground/70">({worktree.branch})</span>
-        )}
+        <span className="truncate text-[10px] text-muted-foreground/70">
+          ({worktree.name})
+        </span>
         <span className="ml-auto flex-shrink-0 text-[10px] tabular-nums text-muted-foreground">
-          {fileCount}
+          {fileCount} {fileCount === 1 ? 'change' : 'changes'}
         </span>
       </button>
       {isExpanded && (
-        <div className="bg-muted/10 px-3 py-1.5">
+        <div className="border-b border-border/40 px-3 py-1.5 pl-5">
           {fileCount === 0 ? (
-            <div className="text-[11px] text-muted-foreground/60 italic">변경사항 없음</div>
+            <div className="text-[11px] text-muted-foreground/60 italic">No changes</div>
           ) : (
             <ul className="space-y-0.5 text-[11px]">
               {worktree.modified.map((f) => (

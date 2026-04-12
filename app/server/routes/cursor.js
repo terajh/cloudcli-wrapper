@@ -527,6 +527,35 @@ router.get('/sessions', async (req, res) => {
           console.log('Could not read blobs:', e.message);
         }
         
+        // If name is still default, use the first user message as summary
+        if (sessionData.name === 'Untitled Session' || !sessionData.name) {
+          try {
+            const firstUserBlob = await db.get(`
+              SELECT data FROM blobs
+              WHERE substr(data, 1, 1) = X'7B'
+              ORDER BY rowid ASC
+              LIMIT 1
+            `);
+            if (firstUserBlob?.data) {
+              const raw = firstUserBlob.data.toString('utf8');
+              try {
+                const parsed = JSON.parse(raw);
+                let text = '';
+                if (parsed?.content) {
+                  if (Array.isArray(parsed.content)) {
+                    text = parsed.content.find(p => p?.type === 'text' && p.text)?.text || '';
+                  } else if (typeof parsed.content === 'string') {
+                    text = parsed.content;
+                  }
+                }
+                if (text) {
+                  sessionData.name = text.substring(0, 80) + (text.length > 80 ? '…' : '');
+                }
+              } catch (_) {}
+            }
+          } catch (_) {}
+        }
+
         await db.close();
 
         // Finalize createdAt: use parsed meta value when valid, else fall back to store.db mtime
@@ -535,7 +564,7 @@ router.get('/sessions', async (req, res) => {
             sessionData.createdAt = new Date(dbStatMtimeMs).toISOString();
           }
         }
-        
+
         sessions.push(sessionData);
         
       } catch (error) {

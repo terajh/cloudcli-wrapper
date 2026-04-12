@@ -12,13 +12,16 @@ export const readProjectSortOrder = (): ProjectSortOrder => {
   try {
     const rawSettings = localStorage.getItem('claude-settings');
     if (!rawSettings) {
-      return 'name';
+      return 'added';
     }
 
     const settings = JSON.parse(rawSettings) as { projectSortOrder?: ProjectSortOrder };
-    return settings.projectSortOrder === 'date' ? 'date' : 'name';
+    if (settings.projectSortOrder === 'date' || settings.projectSortOrder === 'name') {
+      return settings.projectSortOrder;
+    }
+    return 'added';
   } catch {
-    return 'name';
+    return 'added';
   }
 };
 
@@ -40,20 +43,14 @@ export const persistStarredProjects = (starredProjects: Set<string>) => {
 };
 
 export const getSessionDate = (session: SessionWithProvider): Date => {
-  if (session.__provider === 'cursor') {
-    return new Date(session.createdAt || 0);
-  }
-
-  if (session.__provider === 'codex') {
-    return new Date(session.createdAt || session.lastActivity || 0);
-  }
-
-  return new Date(session.lastActivity || session.createdAt || 0);
+  return new Date(session.createdAt || session.created_at || session.lastActivity || 0);
 };
 
 export const getSessionName = (session: SessionWithProvider, t: TFunction): string => {
   if (session.__provider === 'cursor') {
-    return session.summary || session.name || t('projects.untitledSession');
+    // Cursor backend defaults to "Untitled Session" — treat it as a placeholder.
+    const cursorName = session.name === 'Untitled Session' ? undefined : session.name;
+    return session.summary || cursorName || (session.lastMessage as string | undefined) || t('projects.untitledSession');
   }
 
   if (session.__provider === 'codex') {
@@ -68,15 +65,7 @@ export const getSessionName = (session: SessionWithProvider, t: TFunction): stri
 };
 
 export const getSessionTime = (session: SessionWithProvider): string => {
-  if (session.__provider === 'cursor') {
-    return String(session.createdAt || '');
-  }
-
-  if (session.__provider === 'codex') {
-    return String(session.createdAt || session.lastActivity || '');
-  }
-
-  return String(session.lastActivity || session.createdAt || '');
+  return String(session.createdAt || session.created_at || session.lastActivity || '');
 };
 
 export const createSessionViewModel = (
@@ -123,7 +112,13 @@ export const getAllSessions = (
   }));
 
   return [...claudeSessions, ...cursorSessions, ...codexSessions, ...geminiSessions].sort(
-    (a, b) => getSessionDate(b).getTime() - getSessionDate(a).getTime(),
+    (a, b) => {
+      const diff = getSessionDate(b).getTime() - getSessionDate(a).getTime();
+      if (diff !== 0) return diff;
+      // Stable tiebreaker: reverse-lexicographic by id so newer temp ids
+      // (`new-session-<ts>`) sort before older ones when timestamps collide.
+      return (b.id || '').localeCompare(a.id || '');
+    },
   );
 };
 
@@ -160,6 +155,10 @@ export const sortProjects = (
 
     if (!aStarred && bStarred) {
       return 1;
+    }
+
+    if (projectSortOrder === 'added') {
+      return 0;
     }
 
     if (projectSortOrder === 'date') {

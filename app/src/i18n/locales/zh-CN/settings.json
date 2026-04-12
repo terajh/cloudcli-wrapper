@@ -136,6 +136,7 @@
     "projectSorting": {
       "label": "项目排序",
       "description": "项目在侧边栏中的排列方式",
+      "addedOrder": "添加顺序",
       "alphabetical": "按字母顺序",
       "recentActivity": "最近活动"
     },

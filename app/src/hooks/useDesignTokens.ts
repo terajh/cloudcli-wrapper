@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 /**
  * Vienna 디자인 시스템 토큰
@@ -152,15 +152,32 @@ const applyTokensToDocument = (tokens: DesignTokens) => {
   const root = document.documentElement;
 
   // === 색 ===
-  // background : 컨텐츠 영역(사이드바 우측 전체)의 wide 배경.
-  // sidebar-background : background 에서 +12% lightness 만큼 자동 파생.
-  // 그 외 surface 토큰(card, popover, secondary 등)은 손대지 않는다.
-  // → chat composer / 드롭다운 등 작은 패널은 기존 톤을 유지한다.
-  root.style.setProperty('--background', hexToHslString(tokens.background));
+  // background hex → HSL 분해 → CSS 변수 3개(H, S, L)로 주입.
+  // .dark 의 surface 토큰(card, muted, accent 등)이 calc() 로
+  // --app-base-h/s/l 을 참조하므로, 이 3개만 바꾸면 모든 surface 가 따라온다.
+  const bgHsl = hexToHslString(tokens.background);
+  const bgMatch = bgHsl.match(/^(\d+) (\d+)% (\d+)%$/);
+  if (bgMatch) {
+    root.style.setProperty('--app-base-h', bgMatch[1]);
+    root.style.setProperty('--app-base-s', `${bgMatch[2]}%`);
+    root.style.setProperty('--app-base-l', `${bgMatch[3]}%`);
+  }
+
+  // background / sidebar-background 직접 설정 (인라인 참조용)
+  root.style.setProperty('--background', bgHsl);
   root.style.setProperty(
     '--sidebar-background',
     hexToHslStringLifted(tokens.background, SIDEBAR_LIFT_PERCENT),
   );
+
+  // accent (강조색) — primary/ring 토큰
+  const accentHsl = hexToHslString(tokens.accent);
+  root.style.setProperty('--primary', accentHsl);
+  root.style.setProperty('--ring', accentHsl);
+
+  // foreground
+  root.style.setProperty('--foreground', hexToHslString(tokens.foreground));
+
   // 폰트
   root.style.setProperty('--font-ui', tokens.uiFont);
   root.style.setProperty('--font-code', tokens.codeFont);
@@ -170,18 +187,24 @@ const applyTokensToDocument = (tokens: DesignTokens) => {
 
 export function useDesignTokens() {
   const [tokens, setTokens] = useState<DesignTokens>(() => readStoredTokens());
+  const debouncedWriteRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tokensRef = useRef(tokens);
+  tokensRef.current = tokens;
 
-  // 초기 마운트 시 한 번, 그리고 변경될 때마다 적용
+  // DOM 적용은 즉시 (실시간 미리보기), 저장+broadcast는 debounce
   useEffect(() => {
     applyTokensToDocument(tokens);
-    writeStoredTokens(tokens);
-    // 다른 useDesignTokens 인스턴스(예: AppContent vs Settings)가
-    // 같은 토큰을 동기화 보유하도록 broadcast.
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(
-        new CustomEvent<DesignTokens>(TOKENS_CHANGED_EVENT, { detail: tokens }),
-      );
-    }
+
+    // 저장 + broadcast는 150ms debounce — 드래그 중 jank 방지
+    if (debouncedWriteRef.current) clearTimeout(debouncedWriteRef.current);
+    debouncedWriteRef.current = setTimeout(() => {
+      writeStoredTokens(tokens);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent<DesignTokens>(TOKENS_CHANGED_EVENT, { detail: tokens }),
+        );
+      }
+    }, 150);
   }, [tokens]);
 
   // 다른 인스턴스에서 토큰이 바뀌었을 때 상태를 동기화
@@ -190,23 +213,41 @@ export function useDesignTokens() {
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<DesignTokens>).detail;
       if (!detail) return;
-      // 동일한 객체면 setState 가 불필요한 렌더를 일으키지 않게 string 비교
-      const same = JSON.stringify(detail) === JSON.stringify(tokens);
-      if (!same) setTokens(detail);
+      const current = tokensRef.current;
+      // 빠른 비교: 색 3개 + 폰트 2개만 체크 (JSON.stringify 회피)
+      if (
+        detail.background === current.background &&
+        detail.accent === current.accent &&
+        detail.foreground === current.foreground &&
+        detail.uiFont === current.uiFont &&
+        detail.codeFont === current.codeFont
+      ) return;
+      setTokens(detail);
     };
     window.addEventListener(TOKENS_CHANGED_EVENT, handler as EventListener);
     return () => window.removeEventListener(TOKENS_CHANGED_EVENT, handler as EventListener);
-  }, [tokens]);
+  }, []);
 
   const updateToken = useCallback(<K extends keyof DesignTokens>(key: K, value: DesignTokens[K]) => {
     setTokens((prev) => {
       const next = { ...prev, [key]: value } as DesignTokens;
-      // hex 정규화 (color 필드만)
       if (key === 'background' || key === 'accent' || key === 'foreground') {
         next[key] = normalizeHex(value as string) as DesignTokens[K];
       }
       return next;
     });
+  }, []);
+
+  // DOM-only live preview — no React state update, no localStorage write.
+  // Used by ColorPicker during drag for zero-jank real-time feedback.
+  // Call updateToken() on pointerup to commit to state.
+  const applyLive = useCallback(<K extends keyof DesignTokens>(key: K, value: DesignTokens[K]) => {
+    const current = tokensRef.current;
+    const next = { ...current, [key]: value } as DesignTokens;
+    if (key === 'background' || key === 'accent' || key === 'foreground') {
+      next[key] = normalizeHex(value as string) as DesignTokens[K];
+    }
+    applyTokensToDocument(next);
   }, []);
 
   const resetTokens = useCallback(() => {
@@ -216,6 +257,7 @@ export function useDesignTokens() {
   return {
     tokens,
     updateToken,
+    applyLive,
     resetTokens,
   };
 }

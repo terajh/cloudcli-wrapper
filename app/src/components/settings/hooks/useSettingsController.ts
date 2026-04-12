@@ -211,7 +211,7 @@ export function useSettingsController({ isOpen, initialTab, projects, onClose }:
   const [activeTab, setActiveTab] = useState<SettingsMainTab>(() => normalizeMainTab(initialTab));
   const [saveStatus, setSaveStatus] = useState<'success' | 'error' | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [projectSortOrder, setProjectSortOrder] = useState<ProjectSortOrder>('name');
+  const [projectSortOrder, setProjectSortOrder] = useState<ProjectSortOrder>('added');
   const [codeEditorSettings, setCodeEditorSettings] = useState<CodeEditorSettingsState>(() => (
     readCodeEditorSettings()
   ));
@@ -667,7 +667,13 @@ export function useSettingsController({ isOpen, initialTab, projects, onClose }:
         disallowedTools: savedClaudeSettings.disallowedTools || [],
         skipPermissions: Boolean(savedClaudeSettings.skipPermissions),
       });
-      setProjectSortOrder(savedClaudeSettings.projectSortOrder === 'date' ? 'date' : 'name');
+      setProjectSortOrder(
+        savedClaudeSettings.projectSortOrder === 'date'
+          ? 'date'
+          : savedClaudeSettings.projectSortOrder === 'name'
+            ? 'name'
+            : 'added',
+      );
 
       const savedCursorSettings = parseJson<CursorSettingsStorage>(
         localStorage.getItem('cursor-tools-settings'),
@@ -718,7 +724,7 @@ export function useSettingsController({ isOpen, initialTab, projects, onClose }:
       setCursorPermissions(createEmptyCursorPermissions());
       setNotificationPreferences(createDefaultNotificationPreferences());
       setCodexPermissionMode('default');
-      setProjectSortOrder('name');
+      setProjectSortOrder('added');
     }
   }, [fetchCodexMcpServers, fetchCursorMcpServers, fetchMcpServers]);
 
