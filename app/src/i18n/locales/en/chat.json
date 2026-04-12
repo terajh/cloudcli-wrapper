@@ -61,7 +61,8 @@
   },
   "thinking": {
     "title": "Thinking...",
-    "emoji": "💭 Thinking..."
+    "emoji": "💭 Thinking...",
+    "generating": "Generating response…"
   },
   "json": {
     "response": "JSON Response"
@@ -134,7 +135,8 @@
     "clickToChangeMode": "Click to change permission mode (or press Tab in input)",
     "showAllCommands": "Show all commands",
     "clearInput": "Clear input",
-    "scrollToBottom": "Scroll to bottom"
+    "scrollToBottom": "Scroll to bottom",
+    "followupQueued": "{{count}} message(s) queued"
   },
   "thinkingMode": {
     "selector": {
@@ -268,5 +270,13 @@
   },
   "tasks": {
     "nextTaskPrompt": "Start the next task"
+  },
+  "scroll": {
+    "toBottom": "Scroll to bottom",
+    "newMessages": "New messages ↓"
+  },
+  "commands": {
+    "nothingToUndo": "Nothing to undo.",
+    "nothingToRedo": "Nothing to redo."
   }
 }

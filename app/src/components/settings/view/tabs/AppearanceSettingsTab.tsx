@@ -1,66 +1,7 @@
-import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RotateCcw } from 'lucide-react';
-
-/**
- * Hex 색상 입력 필드 — native color picker + hex 텍스트 입력 동기화.
- * 사용자는 둘 중 어느 쪽을 조작해도 다른 쪽이 갱신된다.
- */
-function ColorField({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (next: string) => void;
-}) {
-  const [text, setText] = useState(value);
-
-  useEffect(() => {
-    setText(value);
-  }, [value]);
-
-  const commitText = (raw: string) => {
-    const trimmed = raw.trim();
-    const withHash = trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
-    if (/^#[0-9a-fA-F]{6}$/.test(withHash) || /^#[0-9a-fA-F]{3}$/.test(withHash)) {
-      onChange(withHash);
-    } else {
-      // 잘못된 입력 — 마지막 valid 값으로 되돌림
-      setText(value);
-    }
-  };
-
-  return (
-    <div className="flex items-center gap-2">
-      <label
-        className="relative inline-flex h-9 w-9 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-border"
-        style={{ backgroundColor: value }}
-      >
-        <input
-          type="color"
-          value={value}
-          onChange={(event) => onChange(event.target.value.toUpperCase())}
-          className="absolute inset-0 cursor-pointer opacity-0"
-          aria-label="색상 선택"
-        />
-      </label>
-      <input
-        type="text"
-        value={text}
-        onChange={(event) => setText(event.target.value)}
-        onBlur={(event) => commitText(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter') {
-            (event.target as HTMLInputElement).blur();
-          }
-        }}
-        spellCheck={false}
-        className="w-28 rounded-lg border border-input bg-card px-3 py-2 font-mono text-sm uppercase text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-      />
-    </div>
-  );
-}
 import { DarkModeToggle } from '../../../../shared/view/ui';
+import ColorPickerPopover from '../../../../shared/view/ui/ColorPickerPopover';
 import type { CodeEditorSettingsState, ProjectSortOrder } from '../../types/types';
 import LanguageSelector from '../../../../shared/view/ui/LanguageSelector';
 import SettingsCard from '../SettingsCard';
@@ -80,6 +21,7 @@ type AppearanceSettingsTabProps = {
   onCodeEditorFontSizeChange: (value: string) => void;
   designTokens: DesignTokens;
   onDesignTokenChange: <K extends keyof DesignTokens>(key: K, value: DesignTokens[K]) => void;
+  onDesignTokenLive?: <K extends keyof DesignTokens>(key: K, value: DesignTokens[K]) => void;
   onResetDesignTokens: () => void;
 };
 
@@ -94,6 +36,7 @@ export default function AppearanceSettingsTab({
   onCodeEditorFontSizeChange,
   designTokens,
   onDesignTokenChange,
+  onDesignTokenLive,
   onResetDesignTokens,
 }: AppearanceSettingsTabProps) {
   const { t } = useTranslation('settings');
@@ -111,9 +54,11 @@ export default function AppearanceSettingsTab({
             label="Background"
             description="컨텐츠 영역의 베이스 색. 사이드바는 이 색에서 자동으로 살짝 밝게 파생됩니다."
           >
-            <ColorField
+            <ColorPickerPopover
               value={designTokens.background}
               onChange={(value) => handleColorInput('background', value)}
+              onLiveChange={onDesignTokenLive ? (value) => onDesignTokenLive('background', value) : undefined}
+              ariaLabel="Background 색상 선택"
             />
           </SettingsRow>
 
@@ -187,6 +132,7 @@ export default function AppearanceSettingsTab({
               onChange={(event) => onProjectSortOrderChange(event.target.value as ProjectSortOrder)}
               className="w-full rounded-lg border border-input bg-card p-2.5 text-sm text-foreground touch-manipulation focus:border-primary focus:ring-1 focus:ring-primary sm:w-36"
             >
+              <option value="added">{t('appearanceSettings.projectSorting.addedOrder')}</option>
               <option value="name">{t('appearanceSettings.projectSorting.alphabetical')}</option>
               <option value="date">{t('appearanceSettings.projectSorting.recentActivity')}</option>
             </select>

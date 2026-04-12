@@ -13,6 +13,7 @@ import type { Project } from '../../../../types/app';
 import { ToolRenderer, shouldHideToolResult } from '../../tools';
 import { Markdown } from './Markdown';
 import MessageCopyControl from './MessageCopyControl';
+import TextReveal from './TextReveal';
 
 type DiffLine = {
   type: string;
@@ -84,9 +85,16 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, o
         entries.forEach((entry) => {
           if (entry.isIntersecting && !isExpanded) {
             setIsExpanded(true);
+            // Open native <details> elements (SubagentContainer history, raw params, etc.)
             const details = node.querySelectorAll<HTMLDetailsElement>('details');
             details.forEach((detail) => {
               detail.open = true;
+            });
+            // Open custom CollapsibleSection elements via click on their toggle button
+            const collapsibles = node.querySelectorAll<HTMLElement>('[data-collapsible-open="false"]');
+            collapsibles.forEach((el) => {
+              const btn = el.querySelector<HTMLButtonElement>(':scope > button');
+              btn?.click();
             });
           }
         });
@@ -186,13 +194,13 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, o
 
             {message.isToolUse ? (
               <>
-                <div className="flex flex-col">
-                  <div className="flex flex-col">
+                {message.displayText && (
+                  <div className="mb-1">
                     <Markdown className="prose prose-sm max-w-none dark:prose-invert">
-                      {String(message.displayText || '')}
+                      {message.displayText}
                     </Markdown>
                   </div>
-                </div>
+                )}
 
                 {message.toolInput && (
                   <ToolRenderer
@@ -304,23 +312,17 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, o
               // user submits, replaced by streaming content on the first token.
               // Gives visible anchor for where the response will land.
               <div
-                className="flex items-center gap-2 py-1.5 text-xs text-muted-foreground"
+                className="flex items-center gap-3 rounded-lg px-1 py-3"
                 role="status"
                 aria-live="polite"
                 data-testid="assistant-placeholder"
               >
-                <div className="flex gap-1">
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-muted-foreground" />
-                  <span
-                    className="h-1.5 w-1.5 animate-pulse rounded-full bg-muted-foreground"
-                    style={{ animationDelay: '0.15s' }}
-                  />
-                  <span
-                    className="h-1.5 w-1.5 animate-pulse rounded-full bg-muted-foreground"
-                    style={{ animationDelay: '0.3s' }}
-                  />
+                <div className="flex items-center gap-1.5">
+                  <span className="thinking-dot h-2 w-2 rounded-full bg-blue-400/70 dark:bg-blue-400/60" />
+                  <span className="thinking-dot h-2 w-2 rounded-full bg-blue-400/70 dark:bg-blue-400/60" style={{ animationDelay: '0.2s' }} />
+                  <span className="thinking-dot h-2 w-2 rounded-full bg-blue-400/70 dark:bg-blue-400/60" style={{ animationDelay: '0.4s' }} />
                 </div>
-                <span>Receiving…</span>
+                <span className="text-xs text-muted-foreground/80">{t('thinking.generating')}</span>
               </div>
             ) : message.isInteractivePrompt ? (
               // Special handling for interactive prompts
@@ -404,14 +406,20 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, o
                 </div>
               </div>
             ) : message.isThinking ? (
-              /* Thinking messages - collapsible by default */
+              /* Thinking messages - collapsible with animated preview */
               <div className="text-sm text-gray-700 dark:text-gray-300">
                 <details className="group">
                   <summary className="flex cursor-pointer items-center gap-2 font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
                     <svg className="h-3 w-3 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
-                    <span>{t('thinking.emoji')}</span>
+                    <span className="flex items-center gap-2">
+                      {t('thinking.emoji')}
+                      <TextReveal
+                        text={String(message.content || '').slice(0, 60).replace(/\n/g, ' ')}
+                        className="text-xs text-gray-400 dark:text-gray-500"
+                      />
+                    </span>
                   </summary>
                   <div className="mt-2 border-l-2 border-gray-300 pl-4 text-sm text-gray-600 dark:border-gray-600 dark:text-gray-400">
                     <Markdown className="prose prose-sm prose-gray max-w-none dark:prose-invert">
@@ -445,6 +453,16 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, o
                     (trimmedContent.endsWith('}') || trimmedContent.endsWith(']'))) {
                     try {
                       const parsed = JSON.parse(trimmedContent);
+
+                      // Skip JSON rendering for tool-call-like structures that
+                      // should be rendered as normal Markdown instead.
+                      const isToolCallLike =
+                        parsed?.type === 'tool_use' ||
+                        parsed?.tool_calls !== undefined ||
+                        parsed?.function_call !== undefined ||
+                        (Array.isArray(parsed) && parsed.length > 0 && parsed[0]?.type === 'tool_use');
+                      if (isToolCallLike) throw new Error('tool-call');
+
                       const formatted = JSON.stringify(parsed, null, 2);
 
                       return (

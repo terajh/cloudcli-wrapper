@@ -18,8 +18,17 @@ import { notifyRunFailed, notifyRunStopped } from './services/notification-orche
 import { codexAdapter } from './providers/codex/adapter.js';
 import { createNormalizedMessage } from './providers/types.js';
 
-// Track active sessions
+// Track active sessions, keyed by the resolved session id (the id we got
+// from the `thread.started` event or from `resumeThread`).
 const activeCodexSessions = new Map();
+
+// Track in-flight runs that don't yet have a resolved session id, keyed by
+// the WebSocket connection. This covers the window between
+// `queryCodex(...)` being called and the SDK emitting its first
+// `thread.started` event with the real `thread_id`. Without this map,
+// the user pressing "Stop Generation" during that window would silently
+// no-op because `abortCodexSession(undefined)` has nothing to look up.
+const pendingCodexRunsByWs = new WeakMap();
 
 /**
  * Transform Codex SDK event to WebSocket message format
@@ -208,6 +217,21 @@ export async function queryCodex(command, options = {}, ws) {
   let receivedAnyEvent = false;
   const abortController = new AbortController();
 
+  // Register the in-flight run against the WS connection IMMEDIATELY so the
+  // user can hit "Stop Generation" during the pre-thread.started window
+  // and have it actually abort. This entry is unregistered as soon as we
+  // resolve a real `currentSessionId` (then `activeCodexSessions` takes
+  // over) or when the run finishes/errors out.
+  if (ws) {
+    pendingCodexRunsByWs.set(ws, { abortController, status: 'running' });
+  }
+
+  const clearPendingForWs = () => {
+    if (ws && pendingCodexRunsByWs.get(ws)?.abortController === abortController) {
+      pendingCodexRunsByWs.delete(ws);
+    }
+  };
+
   try {
     // Initialize Codex SDK
     codex = new Codex();
@@ -251,6 +275,9 @@ export async function queryCodex(command, options = {}, ws) {
         abortController,
         startedAt: new Date().toISOString()
       });
+      // Resumed thread already has its real id → clear the WS-scoped
+      // pending entry so the abort path goes through `activeCodexSessions`.
+      clearPendingForWs();
       sendMessage(ws, createNormalizedMessage({ kind: 'session_created', newSessionId: currentSessionId, sessionId: currentSessionId, provider: 'codex' }));
     }
 
@@ -267,13 +294,20 @@ export async function queryCodex(command, options = {}, ws) {
       // id that chokidar will later index.
       if (!currentSessionId && event.type === 'thread.started' && event.thread_id) {
         currentSessionId = event.thread_id;
+        // Carry the WS-pending entry's status forward — if the user
+        // already pressed Stop while we were waiting on `thread.started`,
+        // we want the new map entry to start in 'aborted' state so the
+        // event-loop's status check immediately bails.
+        const pending = ws ? pendingCodexRunsByWs.get(ws) : null;
+        const initialStatus = pending?.status === 'aborted' ? 'aborted' : 'running';
         activeCodexSessions.set(currentSessionId, {
           thread,
           codex,
-          status: 'running',
+          status: initialStatus,
           abortController,
           startedAt: new Date().toISOString()
         });
+        clearPendingForWs();
         sendMessage(ws, createNormalizedMessage({ kind: 'session_created', newSessionId: currentSessionId, sessionId: currentSessionId, provider: 'codex' }));
       }
 
@@ -383,6 +417,10 @@ export async function queryCodex(command, options = {}, ws) {
         session.status = session.status === 'aborted' ? 'aborted' : 'completed';
       }
     }
+    // Always clean up the WS-pending entry, whether or not we ever
+    // resolved a real session id (it may be left over if `thread.started`
+    // never fired before an error tore the run down).
+    clearPendingForWs();
   }
 }
 
@@ -405,6 +443,35 @@ export function abortCodexSession(sessionId) {
     console.warn(`[Codex] Failed to abort session ${sessionId}:`, error);
   }
 
+  return true;
+}
+
+/**
+ * Abort the in-flight Codex run associated with a WebSocket connection.
+ *
+ * Used by the Stop Generation button when the user fires it during the
+ * window between `queryCodex(...)` being called and the SDK emitting its
+ * first `thread.started` event. In that window we don't yet know the
+ * real session id, so `abortCodexSession(undefined)` would no-op. Looking
+ * the entry up by WebSocket lets us cancel the in-flight run anyway.
+ *
+ * Once `thread.started` resolves a real id, the entry is moved to
+ * `activeCodexSessions` and the per-WS map no longer holds it, so the
+ * normal id-based abort path takes over.
+ *
+ * @param {WebSocket} ws - The WebSocket connection that initiated the run
+ * @returns {boolean} - Whether a pending run was aborted
+ */
+export function abortPendingCodexRun(ws) {
+  if (!ws) return false;
+  const pending = pendingCodexRunsByWs.get(ws);
+  if (!pending) return false;
+  pending.status = 'aborted';
+  try {
+    pending.abortController?.abort();
+  } catch (error) {
+    console.warn('[Codex] Failed to abort pending run:', error);
+  }
   return true;
 }
 

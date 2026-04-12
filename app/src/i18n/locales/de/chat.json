@@ -61,7 +61,8 @@
   },
   "thinking": {
     "title": "Denkt nach...",
-    "emoji": "💭 Denkt nach..."
+    "emoji": "💭 Denkt nach...",
+    "generating": "Antwort wird generiert…"
   },
   "json": {
     "response": "JSON-Antwort"
@@ -134,7 +135,8 @@
     "clickToChangeMode": "Klicken, um den Berechtigungsmodus zu ändern (oder Tab in der Eingabe drücken)",
     "showAllCommands": "Alle Befehle anzeigen",
     "clearInput": "Eingabe leeren",
-    "scrollToBottom": "Nach unten scrollen"
+    "scrollToBottom": "Nach unten scrollen",
+    "followupQueued": "{{count}} Nachricht(en) in der Warteschlange"
   },
   "thinkingMode": {
     "selector": {
@@ -268,5 +270,13 @@
   },
   "tasks": {
     "nextTaskPrompt": "Nächste Aufgabe starten"
+  },
+  "scroll": {
+    "toBottom": "Nach unten scrollen",
+    "newMessages": "Neue Nachrichten ↓"
+  },
+  "commands": {
+    "nothingToUndo": "Nichts zum Ruckgangig machen.",
+    "nothingToRedo": "Nichts zum Wiederholen."
   }
 }

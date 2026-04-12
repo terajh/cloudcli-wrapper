@@ -136,6 +136,7 @@
     "projectSorting": {
       "label": "プロジェクトの並び順",
       "description": "サイドバーでのプロジェクトの並び順を設定します",
+      "addedOrder": "追加順",
       "alphabetical": "アルファベット順",
       "recentActivity": "最近のアクティビティ順"
     },

@@ -66,7 +66,7 @@ import { getProjects, getSessions, renameProject, deleteSession, deleteProject, 
 import { queryClaudeSDK, abortClaudeSDKSession, isClaudeSDKSessionActive, getActiveClaudeSDKSessions, resolveToolApproval, getPendingApprovalsForSession, reconnectSessionWriter } from './claude-sdk.js';
 import { getAvailableClaudeModels } from './claude-model-probe.js';
 import { spawnCursor, abortCursorSession, isCursorSessionActive, getActiveCursorSessions } from './cursor-cli.js';
-import { queryCodex, abortCodexSession, isCodexSessionActive, getActiveCodexSessions } from './openai-codex.js';
+import { queryCodex, abortCodexSession, abortPendingCodexRun, isCodexSessionActive, getActiveCodexSessions } from './openai-codex.js';
 import { spawnGemini, abortGeminiSession, isGeminiSessionActive, getActiveGeminiSessions } from './gemini-cli.js';
 import sessionManager from './sessionManager.js';
 import gitRoutes from './routes/git.js';
@@ -1577,10 +1577,25 @@ function handleChatConnection(ws, request) {
                 const provider = data.provider || 'claude';
                 let success;
 
+                // Detect "abort an in-flight run we don't yet have a real
+                // id for". The frontend signals this by sending the
+                // current temp id (`new-session-…`) or by omitting the
+                // sessionId entirely. The codex backend can fall back to
+                // a per-WS lookup; other providers stay id-based for now.
+                const isTempOrMissing =
+                    !data.sessionId ||
+                    (typeof data.sessionId === 'string' && data.sessionId.startsWith('new-session-'));
+
                 if (provider === 'cursor') {
                     success = abortCursorSession(data.sessionId);
                 } else if (provider === 'codex') {
                     success = abortCodexSession(data.sessionId);
+                    // Fallback for the pre-`thread.started` window where no
+                    // real id has been resolved yet — abort by WS instead.
+                    if (!success || isTempOrMissing) {
+                        const pendingAborted = abortPendingCodexRun(ws);
+                        success = success || pendingAborted;
+                    }
                 } else if (provider === 'gemini') {
                     success = abortGeminiSession(data.sessionId);
                 } else {
@@ -2660,7 +2675,7 @@ async function startServer() {
 
             console.log('');
             console.log(c.dim('═'.repeat(63)));
-            console.log(`  ${c.bright('Claude Code UI Server - Ready')}`);
+            console.log(`  ${c.bright('Vienna Server - Ready')}`);
             console.log(c.dim('═'.repeat(63)));
             console.log('');
             console.log(`${c.info('[INFO]')} Server URL:  ${c.bright('http://' + DISPLAY_HOST + ':' + SERVER_PORT)}`);

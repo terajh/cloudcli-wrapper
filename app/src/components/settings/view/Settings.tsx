@@ -84,7 +84,7 @@ function Settings({ isOpen, onClose, projects = [], initialTab = 'agents' }: Set
     unsubscribe: pushUnsubscribe,
   } = useWebPush();
 
-  const { tokens: designTokens, updateToken: updateDesignToken, resetTokens: resetDesignTokens } =
+  const { tokens: designTokens, updateToken: updateDesignToken, applyLive: applyDesignTokenLive, resetTokens: resetDesignTokens } =
     useDesignTokens();
 
   const handleEnablePush = async () => {
@@ -134,8 +134,21 @@ function Settings({ isOpen, onClose, projects = [], initialTab = 'agents' }: Set
     // `vienna-main-content` 클래스를 함께 부여해 Vienna 의 글로벌 zoom
     // ( Cmd+= / Cmd+- ) 가 설정 모달에도 동일하게 적용되도록 한다. 이렇게
     // 해야 모달 폰트 사이즈가 사이드바·컨텐츠 영역과 통일된다.
-    <div className="vienna-main-content modal-backdrop fixed inset-0 z-[9999] flex items-center justify-center bg-background/80 backdrop-blur-sm md:p-4">
-      <div className="flex h-full w-full flex-col overflow-hidden border border-border bg-background shadow-2xl md:h-[90vh] md:max-w-4xl md:rounded-xl">
+    //
+    // WKWebView 페인트 버그 회피 — 사이드바 코드와 동일한 패턴:
+    // backdrop-blur 와 Tailwind 의 `bg-background` (CSS class) 를 조합하면
+    // WKWebView 가 CSS 변수 변경 후 페인트를 갱신하지 않아서, 사용자가 디자인
+    // 토큰의 background 색을 바꿔도 모달이 옛 색을 그대로 그린다. 인라인
+    // backgroundColor 로 같은 변수를 직접 가리키면 페인트가 정상 갱신된다.
+    // (참고: SidebarContent / SidebarProjectItem 도 동일한 우회 사용)
+    <div
+      className="vienna-main-content modal-backdrop fixed inset-0 z-[9999] flex items-center justify-center backdrop-blur-sm md:p-4"
+      style={{ backgroundColor: 'hsl(var(--background) / 0.8)' }}
+    >
+      <div
+        className="flex h-full w-full flex-col overflow-hidden border border-border shadow-2xl md:h-[90vh] md:max-w-4xl md:rounded-xl"
+        style={{ backgroundColor: 'hsl(var(--background))' }}
+      >
         {/* Header */}
         <div className="flex flex-shrink-0 items-center justify-between border-b border-border px-4 py-3 md:px-5">
           <h2 className="text-base font-semibold text-foreground">{t('title')}</h2>
@@ -173,6 +186,7 @@ function Settings({ isOpen, onClose, projects = [], initialTab = 'agents' }: Set
                   onCodeEditorFontSizeChange={(value) => updateCodeEditorSetting('fontSize', value)}
                   designTokens={designTokens}
                   onDesignTokenChange={updateDesignToken}
+                  onDesignTokenLive={applyDesignTokenLive}
                   onResetDesignTokens={resetDesignTokens}
                 />
               )}

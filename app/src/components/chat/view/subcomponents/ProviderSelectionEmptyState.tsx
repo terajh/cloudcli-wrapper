@@ -134,9 +134,19 @@ export default function ProviderSelectionEmptyState({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isModelDropdownOpen]);
 
+  const [isProviderSwitching, setIsProviderSwitching] = useState(false);
+
   const selectProvider = (next: SessionProvider) => {
+    if (next === provider) return;
+    setIsProviderSwitching(true);
     setProvider(next);
     localStorage.setItem("selected-provider", next);
+    // Allow one frame for the enter class to apply, then transition to active
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        setIsProviderSwitching(false);
+      });
+    });
     setTimeout(() => textareaRef.current?.focus(), 100);
   };
 
@@ -253,7 +263,7 @@ export default function ProviderSelectionEmptyState({
 
           {/* Model picker — appears after provider is chosen */}
           <div
-            className={`transition-all duration-200 ${provider ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-1 opacity-0"}`}
+            className={`${isProviderSwitching ? "provider-switch-enter" : "provider-switch-active"} ${provider ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-1 opacity-0"}`}
           >
             <div className="mb-5 flex items-center justify-center gap-2">
               <span className="text-sm text-muted-foreground">

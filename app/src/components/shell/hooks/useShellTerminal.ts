@@ -13,6 +13,7 @@ import {
 } from '../constants/constants';
 import { copyTextToClipboard } from '../../../utils/clipboard';
 import { isCodexLoginCommand } from '../utils/auth';
+import { createCompositionGate } from '../utils/imeComposition';
 import { sendSocketMessage } from '../utils/socket';
 import { ensureXtermFocusStyles } from '../utils/terminalStyles';
 
@@ -212,12 +213,39 @@ export function useShellTerminal({
 
     setIsInitialized(true);
 
-    const dataSubscription = nextTerminal.onData((data) => {
-      sendSocketMessage(wsRef.current, {
-        type: 'input',
-        data,
-      });
+    // IME composition gate. xterm.js wires its hidden textarea up to
+    // `onData`, but the textarea fires `input` events for every
+    // intermediate composition character (한글 자모, Chinese pinyin,
+    // Japanese kana ↔ kanji conversion, …). Forwarding those raw
+    // intermediate characters to the PTY corrupts Korean input — only
+    // a single jamo lands in the shell instead of the composed syllable.
+    //
+    // The gate (see `utils/imeComposition.ts`) swallows `onData`
+    // payloads while the textarea is in a composition cycle and emits
+    // the final composed text exactly once on `compositionend`.
+    const compositionGate = createCompositionGate({
+      send: (data) => {
+        sendSocketMessage(wsRef.current, {
+          type: 'input',
+          data,
+        });
+      },
     });
+    const dataSubscription = nextTerminal.onData((data) => {
+      compositionGate.onData(data);
+    });
+
+    const xtermTextarea = nextTerminal.textarea;
+    const handleCompositionStart = () => {
+      compositionGate.onCompositionStart();
+    };
+    const handleCompositionEnd = (event: CompositionEvent) => {
+      compositionGate.onCompositionEnd(event.data);
+    };
+    if (xtermTextarea) {
+      xtermTextarea.addEventListener('compositionstart', handleCompositionStart);
+      xtermTextarea.addEventListener('compositionend', handleCompositionEnd as EventListener);
+    }
 
     const resizeObserver = new ResizeObserver(() => {
       if (resizeTimeoutRef.current !== null) {
@@ -244,6 +272,10 @@ export function useShellTerminal({
 
     return () => {
       terminalContainerRef.current?.removeEventListener('copy', handleTerminalCopy);
+      if (xtermTextarea) {
+        xtermTextarea.removeEventListener('compositionstart', handleCompositionStart);
+        xtermTextarea.removeEventListener('compositionend', handleCompositionEnd as EventListener);
+      }
       resizeObserver.disconnect();
       if (resizeTimeoutRef.current !== null) {
         window.clearTimeout(resizeTimeoutRef.current);

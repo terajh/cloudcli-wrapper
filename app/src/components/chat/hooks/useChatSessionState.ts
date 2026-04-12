@@ -35,6 +35,7 @@ interface UseChatSessionStateArgs {
   resetStreamingState: () => void;
   pendingViewSessionRef: MutableRefObject<PendingViewSession | null>;
   sessionLifecyclePhaseRef: MutableRefObject<SessionLifecyclePhase>;
+  promotionInProgressRef: MutableRefObject<boolean>;
   sessionStore: SessionStore;
 }
 
@@ -112,6 +113,7 @@ export function useChatSessionState({
   resetStreamingState,
   pendingViewSessionRef,
   sessionLifecyclePhaseRef,
+  promotionInProgressRef,
   sessionStore,
 }: UseChatSessionStateArgs) {
   const [isLoading, setIsLoading] = useState(false);
@@ -301,24 +303,13 @@ export function useChatSessionState({
     [hasMoreMessages, isLoadingMoreMessages, selectedProject, selectedSession, sessionStore],
   );
 
-  const handleScroll = useCallback(async () => {
+  const handleScroll = useCallback(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
 
     const nearBottom = isNearBottom();
     setIsUserScrolledUp(!nearBottom);
-
-    if (!allMessagesLoadedRef.current) {
-      const scrolledNearTop = container.scrollTop < 100;
-      if (!scrolledNearTop) { topLoadLockRef.current = false; return; }
-      if (topLoadLockRef.current) {
-        if (container.scrollTop > 20) topLoadLockRef.current = false;
-        return;
-      }
-      const didLoad = await loadOlderMessages(container);
-      if (didLoad) topLoadLockRef.current = true;
-    }
-  }, [isNearBottom, loadOlderMessages]);
+  }, [isNearBottom]);
 
   useLayoutEffect(() => {
     if (!pendingScrollRestoreRef.current || !scrollContainerRef.current) return;
@@ -329,11 +320,11 @@ export function useChatSessionState({
     pendingScrollRestoreRef.current = null;
   }, [chatMessages.length]);
 
-  // Reset scroll/pagination state on session change
+  // Reset scroll state on session change (no pagination — always show all)
   useEffect(() => {
     if (!searchScrollActiveRef.current) {
       pendingInitialScrollRef.current = true;
-      setVisibleMessageCount(INITIAL_VISIBLE_MESSAGES);
+      setVisibleMessageCount(Infinity);
     }
     topLoadLockRef.current = false;
     pendingScrollRestoreRef.current = null;
@@ -345,7 +336,7 @@ export function useChatSessionState({
     if (!pendingInitialScrollRef.current || !scrollContainerRef.current || isLoadingSessionMessages) return;
     if (chatMessages.length === 0) { pendingInitialScrollRef.current = false; return; }
     pendingInitialScrollRef.current = false;
-    if (!searchScrollActiveRef.current) setTimeout(() => scrollToBottom(), 200);
+    if (!searchScrollActiveRef.current) setTimeout(() => scrollToBottom(), 50);
   }, [chatMessages.length, isLoadingSessionMessages, scrollToBottom]);
 
   // Main session loading effect — store-based
@@ -363,6 +354,13 @@ export function useChatSessionState({
       setTotalMessages(0);
       setTokenBudget(null);
       lastLoadedSessionKeyRef.current = null;
+      return;
+    }
+
+    // Guard E: Promotion is actively in progress — the realtime handler is
+    // swapping temp→real in the store right now. Bailing early prevents the
+    // effect from fetching from the server and wiping realtime messages.
+    if (promotionInProgressRef.current) {
       return;
     }
 
@@ -458,18 +456,22 @@ export function useChatSessionState({
 
     lastLoadedSessionKeyRef.current = sessionKey;
 
-    // Fetch from server → store updates → chatMessages re-derives automatically
+    // Fetch ALL messages from server at once (no pagination)
     setIsLoadingSessionMessages(true);
     sessionStore.fetchFromServer(selectedSession.id, {
       provider: (selectedSession.__provider || provider) as SessionProvider,
       projectName: selectedProject.name,
       projectPath: selectedProject.fullPath || selectedProject.path || '',
-      limit: MESSAGES_PER_PAGE,
+      limit: null,
       offset: 0,
     }).then(slot => {
       if (slot) {
-        setHasMoreMessages(slot.hasMore);
+        setHasMoreMessages(false);
         setTotalMessages(slot.total);
+        setVisibleMessageCount(Infinity);
+        setAllMessagesLoaded(true);
+        allMessagesLoadedRef.current = true;
+        messagesOffsetRef.current = slot.total;
         if (slot.tokenUsage) setTokenBudget(slot.tokenUsage as Record<string, unknown>);
       }
       setIsLoadingSessionMessages(false);

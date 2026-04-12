@@ -136,6 +136,7 @@
     "projectSorting": {
       "label": "Project Sorting",
       "description": "How projects are ordered in the sidebar",
+      "addedOrder": "Added Order",
       "alphabetical": "Alphabetical",
       "recentActivity": "Recent Activity"
     },

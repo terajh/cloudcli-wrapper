@@ -62,6 +62,7 @@ interface UseChatRealtimeHandlersArgs {
   setPendingPermissionRequests: Dispatch<SetStateAction<PendingPermissionRequest[]>>;
   pendingViewSessionRef: MutableRefObject<PendingViewSession | null>;
   sessionLifecyclePhaseRef: MutableRefObject<SessionLifecyclePhase>;
+  promotionInProgressRef: MutableRefObject<boolean>;
   streamBufferRef: MutableRefObject<string>;
   streamTimerRef: MutableRefObject<number | null>;
   accumulatedStreamRef: MutableRefObject<string>;
@@ -71,6 +72,7 @@ interface UseChatRealtimeHandlersArgs {
   onReplaceTemporarySession?: (sessionId?: string | null) => void;
   onNavigateToSession?: (sessionId: string) => void;
   onWebSocketReconnect?: () => void;
+  onFollowupReady?: () => void;
   sessionStore: SessionStore;
 }
 
@@ -92,6 +94,7 @@ export function useChatRealtimeHandlers({
   setPendingPermissionRequests,
   pendingViewSessionRef,
   sessionLifecyclePhaseRef,
+  promotionInProgressRef,
   streamBufferRef,
   streamTimerRef,
   accumulatedStreamRef,
@@ -101,6 +104,7 @@ export function useChatRealtimeHandlers({
   onReplaceTemporarySession,
   onNavigateToSession,
   onWebSocketReconnect,
+  onFollowupReady,
   sessionStore,
 }: UseChatRealtimeHandlersArgs) {
   const lastProcessedMessageRef = useRef<LatestChatMessage | null>(null);
@@ -247,6 +251,10 @@ export function useChatRealtimeHandlers({
         if (!currentSessionId || currentSessionId.startsWith('new-session-')) {
           sessionStorage.setItem('pendingSessionId', newSessionId);
 
+          // Lock the promotion flag so the session-loading effect doesn't
+          // fire a fetch mid-swap and wipe realtime messages (flicker).
+          promotionInProgressRef.current = true;
+
           // Promote the temp slot in the store so realtime messages that
           // arrived under the `new-session-<ts>` id survive the id swap.
           // We do this BEFORE updating currentSessionId / pendingViewSessionRef
@@ -340,6 +348,14 @@ export function useChatRealtimeHandlers({
           // was reading.
           onNavigateToSession?.(newSessionId);
         }
+
+        // Release the promotion lock after all synchronous state updates
+        // are queued. queueMicrotask fires after React batches the state
+        // updates from this handler but before the next paint, so the
+        // session-loading effect sees the cleared flag when it runs.
+        queueMicrotask(() => {
+          promotionInProgressRef.current = false;
+        });
         break;
       }
 
@@ -403,6 +419,12 @@ export function useChatRealtimeHandlers({
           // races from wiping the chat.
           window.refreshProjects?.();
         }
+
+        // Auto-submit next queued followup message after the lifecycle
+        // resets to idle (the setTimeout above sets it on next tick).
+        setTimeout(() => {
+          onFollowupReady?.();
+        }, 50);
         break;
       }
 
@@ -484,6 +506,7 @@ export function useChatRealtimeHandlers({
     onReplaceTemporarySession,
     onNavigateToSession,
     onWebSocketReconnect,
+    onFollowupReady,
     sessionStore,
   ]);
 }

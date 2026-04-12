@@ -60,7 +60,8 @@
   },
   "thinking": {
     "title": "思考中...",
-    "emoji": "💭 思考中..."
+    "emoji": "💭 思考中...",
+    "generating": "応答を生成中…"
   },
   "json": {
     "response": "JSONレスポンス"
@@ -113,7 +114,8 @@
       "enter": "Enterで送信 • Shift+Enterで改行 • Tabでモード切替 • / でスラッシュコマンド"
     },
     "clickToChangeMode": "クリックで権限モードを変更（または入力欄でTab）",
-    "showAllCommands": "すべてのコマンドを表示"
+    "showAllCommands": "すべてのコマンドを表示",
+    "followupQueued": "{{count}} 件のメッセージがキューに入っています"
   },
   "thinkingMode": {
     "selector": {
@@ -235,5 +237,13 @@
     "providers": {
       "assistant": "Assistant"
     }
+  },
+  "scroll": {
+    "toBottom": "一番下へ",
+    "newMessages": "新しいメッセージ ↓"
+  },
+  "commands": {
+    "nothingToUndo": "元に戻す項目がありません。",
+    "nothingToRedo": "やり直す項目がありません。"
   }
 }

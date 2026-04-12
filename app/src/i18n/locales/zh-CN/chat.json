@@ -61,7 +61,8 @@
   },
   "thinking": {
     "title": "思考中...",
-    "emoji": "💭 思考中..."
+    "emoji": "💭 思考中...",
+    "generating": "正在生成回复…"
   },
   "json": {
     "response": "JSON 响应"
@@ -116,7 +117,8 @@
     "clickToChangeMode": "点击更改权限模式（或在输入框中按 Tab）",
     "showAllCommands": "显示所有命令",
     "clearInput": "清空输入",
-    "scrollToBottom": "滚动到底部"
+    "scrollToBottom": "滚动到底部",
+    "followupQueued": "{{count}} 条消息排队中"
   },
   "thinkingMode": {
     "selector": {
@@ -250,5 +252,13 @@
   },
   "tasks": {
     "nextTaskPrompt": "开始下一个任务"
+  },
+  "scroll": {
+    "toBottom": "滚动到底部",
+    "newMessages": "新消息 ↓"
+  },
+  "commands": {
+    "nothingToUndo": "没有可撤销的内容。",
+    "nothingToRedo": "没有可重做的内容。"
   }
 }

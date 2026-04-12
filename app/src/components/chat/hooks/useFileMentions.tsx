@@ -256,6 +256,10 @@ export function useFileMentions({ selectedProject, input, setInput, textareaRef 
     [showFileDropdown, filteredFiles, selectedFileIndex, selectFile],
   );
 
+  const resetFileDropdown = useCallback(() => {
+    setShowFileDropdown(false);
+  }, []);
+
   return {
     showFileDropdown,
     filteredFiles,
@@ -264,5 +268,6 @@ export function useFileMentions({ selectedProject, input, setInput, textareaRef 
     selectFile,
     setCursorPosition,
     handleFileMentionsKeyDown,
+    resetFileDropdown,
   };
 }

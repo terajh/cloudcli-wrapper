@@ -809,6 +809,14 @@ export function useProjectsState({
       setSelectedSession(null);
       setActiveTab('chat');
 
+      // Notify the chat layer that the active session is no longer in-flight.
+      // Without this, the composer / status bar can stay stuck in isLoading
+      // from the previous session, making the "새 스레드" button appear to do
+      // nothing because the chat pane still renders the old processing state.
+      if (typeof window !== 'undefined' && (window as any).__vienna_resetChatLoading__) {
+        (window as any).__vienna_resetChatLoading__();
+      }
+
       // Clear stale sessionStorage keys that can otherwise leak the
       // previous session's id into the composer's submission path. The
       // composer's `effectiveSessionId` fallback chain is:

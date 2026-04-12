@@ -229,6 +229,8 @@ export const cursorAdapter = {
             } else if (typeof content.message.content === 'string') {
               text = content.message.content;
             }
+            // Skip cursor context preamble in nested format too
+            if (role === 'user' && /^OS Version:\s/m.test(text) && /Shell:\s/m.test(text)) continue;
             if (text?.trim()) {
               messages.push(createNormalizedMessage({
                 id: baseId,
@@ -247,6 +249,19 @@ export const cursorAdapter = {
         }
 
         if (content.role === 'system') continue;
+
+        // Skip Cursor's auto-injected context preamble (OS Version, Shell,
+        // Workspace Path, etc.). These are sent as the first "user" blob but
+        // are not actual user messages — they're agent metadata that clutters
+        // the chat UI.
+        if (content.role === 'user') {
+          const firstText = Array.isArray(content.content)
+            ? content.content.find(p => p?.type === 'text')?.text || ''
+            : typeof content.content === 'string' ? content.content : '';
+          if (/^OS Version:\s/m.test(firstText) && /Shell:\s/m.test(firstText)) {
+            continue;
+          }
+        }
 
         // Tool results
         if (content.role === 'tool') {
