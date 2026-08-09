@@ -1,5 +1,7 @@
 # Vienna
 
+<img width="1024" height="1536" alt="image" src="https://github.com/user-attachments/assets/93f9f335-07e0-4e61-ad04-bb35b489cbcb" />
+
 > A native macOS desktop wrapper for [claudecodeui](https://github.com/siteboon/claudecodeui), with a tighter chat UX, real token-by-token streaming, and a single-binary install.
 
 Vienna runs the entire claudecodeui frontend + Express server inside a Tauri (Rust + WKWebView) shell so you get a real native window — title bar, traffic lights, drag, zoom, fullscreen, native menu, Cmd+/-/0 zoom — instead of a browser tab. Everything ships as one DMG + one runtime tarball; no `npm run build` is required at install time.
